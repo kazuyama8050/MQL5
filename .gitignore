@@ -1,3 +1,7 @@
 *.dat
 *.ex5
 Logs/*
+*.chr
+*.ini
+Profiles/Charts/Default/*
+Profiles/Tester/*

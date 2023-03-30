@@ -2,21 +2,25 @@
 #include <Trade\Trade.mqh>
 #include <Indicators\Indicators.mqh>
 #include <MyInclude\MyAccount\MyAccountInfo.mqh>
+#include <MyInclude\MyTrade\MyLossCutTrade.mqh>
 #include "include/ExpertIma.mqh"
 #import "Trade.ex5"
-    int PrintTradeResponseMessage(MqlTradeResult &order_response);
+    bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
 #import
 
 #define MAGIC_NUMBER_TEST = 123456;
+const double loss_cut_line = 0.001;  //損切りライン
 
 static int ExpertIma::slow_ima_handle;
 static int ExpertIma::fast_ima_handle;
 static int ExpertIma::trade_error_cnt = 0;
+static int ExpertIma::loss_cut_total_num = 0;
 static double slow_ma[];
 static double fast_ma[];
 int ma_cnt = 0;
 
 MyAccountInfo myAccountInfo;
+MyLossCutTrade myLossCutTrade;
 ExpertIma expertIma;
 
 
@@ -71,19 +75,6 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, int order) {
     return true;
 }
 
-bool ExpertIma::TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response) {
-    //--- リクエストの送信
-    if(!OrderSend(trade_request,order_response)) {
-        PrintFormat("OrderSend error %d",GetLastError());
-    }
-
-    if (!PrintTradeResponseMessage(order_response)) {
-        return false;
-    }
-    
-    return true;
-}
-
 int ExpertIma::EntrySignal(double &slow_ma_list[], double &fast_ma_list[]) {
     int ret = 0;
 
@@ -126,12 +117,14 @@ bool ExpertIma::MainLoop() {
         }
 
         if (can_trade) {
-            if (!expertIma.TradeOrder(trade_request, trade_result)) {
-                Print("注文リクエストに失敗しました。");
+            if (!TradeOrder(trade_request, trade_result)) {
                 ExpertIma::trade_error_cnt += 1;
             }
         }
     }
+
+    //損切りライン確認 & 決済実行
+    ExpertIma::loss_cut_total_num += myLossCutTrade.ClosePositionByLossCutRule(loss_cut_line);
 
     Sleep(10000); // 10秒スリープ
     return true;
@@ -139,7 +132,7 @@ bool ExpertIma::MainLoop() {
 
 void OnInit() {
     bool test = expertIma.TestPrint("Start");
-    PrintTradeResponseMessage(result);
+    EventSetTimer(86400); //1日間隔でタイマーイベントを呼び出す
 
     ExpertIma::slow_ima_handle = expertIma.ImaIndicator(_Symbol, PERIOD_M5, 25, 0, MODE_SMA, PRICE_CLOSE);
     ExpertIma::fast_ima_handle = expertIma.ImaIndicator(_Symbol, PERIOD_M5, 75, 0, MODE_SMA, PRICE_CLOSE);
@@ -153,4 +146,15 @@ void OnTick() {
         ExpertRemove();
         return;
     }
+}
+
+void OnTimer() {
+    datetime watch_datetime = TimeCurrent();
+    PrintFormat("タイマーイベント起動 %s", TimeToString(watch_datetime));
+    PrintFormat("強制決済回数: %d", ExpertIma::loss_cut_total_num);
+    PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);
+}
+
+void OnDeinit() {
+    EventKillTimer();
 }
