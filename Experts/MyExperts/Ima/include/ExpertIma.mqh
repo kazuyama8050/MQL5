@@ -2,7 +2,7 @@ class ExpertIma {
     public:
         bool ExpertIma::MainLoop();
         int ExpertIma::MaTrade();
-        bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double order);
+        bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal);
     public:
         static int ExpertIma::slow_ima_handle; // 短期移動平均線
         static int ExpertIma::fast_ima_handle; //長期移動平均線
