@@ -1,22 +1,14 @@
 class ExpertIma {
     public:
-        bool ExpertIma::TestPrint(string prt);
         bool ExpertIma::MainLoop();
-        int ExpertIma::ImaIndicator(
-                        string symbol,
-                        ENUM_TIMEFRAMES period, 
-                        int ma_period, 
-                        int ma_shift, 
-                        ENUM_MA_METHOD ma_method, 
-                        ENUM_APPLIED_PRICE applied_price
-        );
-        bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, int order);
-        int ExpertIma::EntrySignal(double &slow_ma[], double &fast_ma[]);
+        int ExpertIma::MaTrade();
+        bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double order);
     public:
         static int ExpertIma::slow_ima_handle; // 短期移動平均線
         static int ExpertIma::fast_ima_handle; //長期移動平均線
         static int ExpertIma::trade_error_cnt; //注文エラー回数
         static int ExpertIma::loss_cut_total_num; //トータル強制決済回数
+        static datetime ExpertIma::ma_trade_last_datetime; //移動平均を用いたラストトレード日時
     protected:
        
     private:

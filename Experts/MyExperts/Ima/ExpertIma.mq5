@@ -3,64 +3,38 @@
 #include <Indicators\Indicators.mqh>
 #include <MyInclude\MyAccount\MyAccountInfo.mqh>
 #include <MyInclude\MyTrade\MyLossCutTrade.mqh>
+#include <MyInclude\MyTechnical\MyMovingAverage.mqh>
 #include "include/ExpertIma.mqh"
 #import "Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
 #import
 
-#define MAGIC_NUMBER_TEST = 123456;
+#define MAGIC_NUMBER 123456
+#define ONE_HOUR_DATETIME 3600
+#define ONE_DATE_DATETIME 86400
 const double loss_cut_line = 0.001;  //損切りライン
 
 static int ExpertIma::slow_ima_handle;
 static int ExpertIma::fast_ima_handle;
 static int ExpertIma::trade_error_cnt = 0;
 static int ExpertIma::loss_cut_total_num = 0;
+static datetime ExpertIma::ma_trade_last_datetime;
 static double slow_ma[];
 static double fast_ma[];
 int ma_cnt = 0;
 
 MyAccountInfo myAccountInfo;
 MyLossCutTrade myLossCutTrade;
+MyMovingAverage myMovingAverage;
 ExpertIma expertIma;
 
-
-bool ExpertIma::TestPrint(string prt) {
-    PrintFormat("%s", prt);
-    return true;
-}
-
-int ExpertIma::ImaIndicator(
-                            string symbol,
-                            ENUM_TIMEFRAMES period, 
-                            int ma_period, 
-                            int ma_shift, 
-                            ENUM_MA_METHOD ma_method, 
-                            ENUM_APPLIED_PRICE applied_price
-                            )
-{
-    int m_ima_handle=iMA(symbol,period,ma_period,ma_shift,ma_method,applied_price);
-    if (m_ima_handle == INVALID_HANDLE) {
-        PrintFormat("Failed To Create IMA Handle, symbol=%s, error code=%d", symbol, GetLastError());
-        return false;
-    }
-    string short_name=StringFormat("iMA(%s/%s, %d, %d, %s, %s)",
-                            symbol,EnumToString(period),
-                            ma_period, ma_shift,EnumToString(ma_method),
-                            EnumToString(applied_price));
-
-    IndicatorSetString(INDICATOR_SHORTNAME,short_name);
-    Print(short_name);
-
-    return m_ima_handle;
-}
-
-bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, int order) {
+bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double order) {
     //--- リクエストのパラメータ
     request.action = TRADE_ACTION_DEAL; //　取引操作タイプ
     request.symbol = Symbol(); // シンボル
     request.volume = 0.01; // 0.1ロットのボリューム（取引数量）
     request.deviation = 5; // 価格からの許容偏差
-    // request.magic = 1111; // 注文のMagicNumber（同一MT内でのEA識別）
+    // request.magic = MAGIC_NUMBER; // 注文のMagicNumber（同一MT内でのEA識別）
     
     // あとはシグナルに重みをつけて取引数量を操作するとかはやりたい
     if (order > 0) {  // 買い注文
@@ -75,30 +49,13 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, int order) {
     return true;
 }
 
-int ExpertIma::EntrySignal(double &slow_ma_list[], double &fast_ma_list[]) {
-    int ret = 0;
-
-    //買いシグナル ゴールデンクロス
-    if (fast_ma_list[2] <= slow_ma_list[2] && fast_ma_list[1] > slow_ma_list[1]) {
-        ret = 1;
-        PrintFormat("買いシグナル発火、fast_ma2=%f <= slow_ma2=%f、fast_ma1=%f > slow_ma1=%f", fast_ma_list[2], slow_ma_list[2], fast_ma_list[1], slow_ma_list[1]);
-    }
-    //売りシグナル デッドクロス
-    if (fast_ma_list[2] >= slow_ma_list[2] && fast_ma_list[1] < slow_ma_list[1]) {
-        ret = -1;
-        PrintFormat("売りシグナル発火、fast_ma2=%f >= slow_ma2=%f、fast_ma1=%f < slow_ma1=%f", fast_ma_list[2], slow_ma_list[2], fast_ma_list[1], slow_ma_list[1]);
-    }
-
-    return ret;
-}
-
-bool ExpertIma::MainLoop() {
+int ExpertIma::MaTrade() {
     bool can_trade = true;
     CopyBuffer(slow_ima_handle, 0, 0, 3, slow_ma);
     CopyBuffer(fast_ima_handle, 0, 0, 3, fast_ma);
 
     // 仕掛けシグナル
-    int ma_signal_ret = expertIma.EntrySignal(slow_ma, fast_ma);
+    double ma_signal_ret = myMovingAverage.EntrySignalNormal(slow_ma, fast_ma);
 
     // 注文
     if (ma_signal_ret != 0) {
@@ -120,7 +77,19 @@ bool ExpertIma::MainLoop() {
             if (!TradeOrder(trade_request, trade_result)) {
                 ExpertIma::trade_error_cnt += 1;
             }
+
+            ExpertIma::ma_trade_last_datetime = TimeLocal();
         }
+    }
+    return 1;
+}
+
+bool ExpertIma::MainLoop() {
+    // 移動平均トレード
+    // 前回移動平均トレードから1時間以上経過していること
+    datetime check_ma_datetime = TimeLocal();
+    if (ExpertIma::ma_trade_last_datetime <= check_ma_datetime - ONE_HOUR_DATETIME) {
+        ExpertIma::MaTrade();
     }
 
     //損切りライン確認 & 決済実行
@@ -131,11 +100,11 @@ bool ExpertIma::MainLoop() {
 }
 
 void OnInit() {
-    bool test = expertIma.TestPrint("Start");
-    EventSetTimer(86400); //1日間隔でタイマーイベントを呼び出す
+    Print("Start!!");
+    EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
 
-    ExpertIma::slow_ima_handle = expertIma.ImaIndicator(_Symbol, PERIOD_M5, 25, 0, MODE_SMA, PRICE_CLOSE);
-    ExpertIma::fast_ima_handle = expertIma.ImaIndicator(_Symbol, PERIOD_M5, 75, 0, MODE_SMA, PRICE_CLOSE);
+    ExpertIma::slow_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, PERIOD_M15, 25, 0, MODE_SMA, PRICE_CLOSE);
+    ExpertIma::fast_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, PERIOD_M15, 75, 0, MODE_SMA, PRICE_CLOSE);
     ArraySetAsSeries(slow_ma, true);
     ArraySetAsSeries(fast_ma, true);
 }
@@ -149,7 +118,7 @@ void OnTick() {
 }
 
 void OnTimer() {
-    datetime watch_datetime = TimeCurrent();
+    datetime watch_datetime = TimeLocal();
     PrintFormat("タイマーイベント起動 %s", TimeToString(watch_datetime));
     PrintFormat("強制決済回数: %d", ExpertIma::loss_cut_total_num);
     PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);

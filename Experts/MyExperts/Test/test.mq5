@@ -188,7 +188,11 @@ void OnInit()
   // double macdValue=priceArray[0];
   // PrintFormat("MACD value %d", macdValue);
 
-
+  datetime test_date = TimeLocal();
+  Print("test_date");
+  Print(test_date);
+  Print(test_date -3600);
+  Print(test_date > test_date - 3600);
 
   return;
 }
