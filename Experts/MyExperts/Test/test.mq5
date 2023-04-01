@@ -29,7 +29,7 @@ int BuyBySymbol(ENUM_TRADE_REQUEST_ACTIONS action, string symbol, double volume,
     PrintFormat("Failed Buy symbol = %s", Symbol());
     return 0;
   }
-  PrintFormat("Success Buy symbol = %s volume = %d price = %d", Symbol(), result.volume, result.price);
+  PrintFormat("Success Buy symbol = %s volume = %f price = %f", Symbol(), result.volume, result.price);
   return 1;
 }
 
@@ -73,10 +73,11 @@ void OnInit()
   double   high  = iHigh(Symbol(),Period(),shift);
   double   low   = iLow(Symbol(),Period(),shift);
   double   close = iClose(NULL,PERIOD_CURRENT,shift);
-  long     volume= iVolume(Symbol(),0,shift);
+  long     volume= iVolume(Symbol(),PERIOD_M15,1);
   int     bars  = iBars(NULL,0);
 
   Print("OPEN: ", open);
+  Print("volume: ", volume);
  
   Comment(Symbol(),",",EnumToString(Period()),"\n",
           "Time: " ,TimeToString(time,TIME_DATE|TIME_SECONDS),"\n",
@@ -97,24 +98,24 @@ void OnInit()
    * テイクプロフィット（利確値）
    * スリッページ（現在値と発注前のレートとの乖離がどれくらいまでなら取引を許容するか）
   **/
-  ENUM_SYMBOL_TRADE_EXECUTION exeMode = SymbolInfoInteger(NULL,SYMBOL_TRADE_EXEMODE);
-  string executionType=EnumToString(exeMode);
-  Print(executionType);
+  // ENUM_SYMBOL_TRADE_EXECUTION exeMode = SymbolInfoInteger(NULL,SYMBOL_TRADE_EXEMODE);
+  // string executionType=EnumToString(exeMode);
+  // Print(executionType);
 
-  // 買い注文
-  BuyBySymbol(TRADE_ACTION_DEAL, Symbol(), 0.01, ORDER_TYPE_BUY, SymbolInfoDouble(Symbol(),SYMBOL_ASK), 5);
-  BuyBySymbol(TRADE_ACTION_DEAL, Symbol(), 0.02, ORDER_TYPE_BUY, SymbolInfoDouble(Symbol(),SYMBOL_ASK), 5);
-  BuyBySymbol(TRADE_ACTION_DEAL, Symbol(), 0.01, ORDER_TYPE_SELL, SymbolInfoDouble(Symbol(),SYMBOL_BID), 5);
+  // // 買い注文
+  // BuyBySymbol(TRADE_ACTION_DEAL, Symbol(), 0.01, ORDER_TYPE_BUY, SymbolInfoDouble(Symbol(),SYMBOL_ASK), 5);
+  // BuyBySymbol(TRADE_ACTION_DEAL, Symbol(), 0.02, ORDER_TYPE_BUY, SymbolInfoDouble(Symbol(),SYMBOL_ASK), 5);
+  // BuyBySymbol(TRADE_ACTION_DEAL, Symbol(), 0.01, ORDER_TYPE_SELL, SymbolInfoDouble(Symbol(),SYMBOL_BID), 5);
   // 構造体リセット
   // ClearStructures();
 
   /**
    * ポジション決済
   **/
-  MqlTradeRequest request={};
-  MqlTradeResult  result={};
-  int total=PositionsTotal(); //　保有ポジション数
-  PrintFormat("total=%d", total);
+  // MqlTradeRequest request={};
+  // MqlTradeResult  result={};
+  // int total=PositionsTotal(); //　保有ポジション数
+  // PrintFormat("total=%d", total);
 //--- 全ての保有ポジションの取捨
   // for (int i = 0 i >= total - 1; i++) {
     // //--- 注文のパラメータ
@@ -130,46 +131,46 @@ void OnInit()
 
   // }
 
-  for (int i = total - 1; i >= 0; i--) {
-    //--- 注文のパラメータ
-    ulong  position_ticket=PositionGetTicket(i);       // ポジションチケット
-    // 小数点以下の桁数
-    ulong  magic=PositionGetInteger(POSITION_MAGIC);  // ポジションのMagicNumber
-    double volume=PositionGetDouble(POSITION_VOLUME); // ポジションボリューム
-    double position_price=PositionGetDouble(POSITION_PRICE_OPEN); // ポジションの価格
-    string position_symbol=PositionGetString(POSITION_SYMBOL);
-    ENUM_POSITION_TYPE type=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);   // ポジションタイプ
-    PrintFormat("position_ticket=%d", position_ticket);
-    PrintFormat("magic=%f", volume);
-    PrintFormat("price=%f", position_price);
-    Print(type);
+  // for (int i = total - 1; i >= 0; i--) {
+  //   //--- 注文のパラメータ
+  //   ulong  position_ticket=PositionGetTicket(i);       // ポジションチケット
+  //   // 小数点以下の桁数
+  //   ulong  magic=PositionGetInteger(POSITION_MAGIC);  // ポジションのMagicNumber
+  //   double volume=PositionGetDouble(POSITION_VOLUME); // ポジションボリューム
+  //   double position_price=PositionGetDouble(POSITION_PRICE_OPEN); // ポジションの価格
+  //   string position_symbol=PositionGetString(POSITION_SYMBOL);
+  //   ENUM_POSITION_TYPE type=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);   // ポジションタイプ
+  //   PrintFormat("position_ticket=%d", position_ticket);
+  //   PrintFormat("magic=%f", volume);
+  //   PrintFormat("price=%f", position_price);
+  //   Print(type);
 
-    request.action = TRADE_ACTION_DEAL;
-    request.position = position_ticket;
-    request.symbol = position_symbol;
-    request.volume = volume;
+  //   request.action = TRADE_ACTION_DEAL;
+  //   request.position = position_ticket;
+  //   request.symbol = position_symbol;
+  //   request.volume = volume;
     // request.type = POSITION_TYPE_BUY;
     // request.price=SymbolInfoDouble(position_symbol,SYMBOL_ASK);
-    request.deviation = 5;
+  //   request.deviation = 5;
 
-    if(type==POSITION_TYPE_BUY)
-    {
-      request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
-      request.type =ORDER_TYPE_SELL;
-    }
-    else
-    {
-      request.price=SymbolInfoDouble(position_symbol,SYMBOL_ASK);
-      request.type =ORDER_TYPE_BUY;
-    }
+  //   if(type==POSITION_TYPE_BUY)
+  //   {
+  //     request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
+  //     request.type =ORDER_TYPE_SELL;
+  //   }
+  //   else
+  //   {
+  //     request.price=SymbolInfoDouble(position_symbol,SYMBOL_ASK);
+  //     request.type =ORDER_TYPE_BUY;
+  //   }
 
-    if(!OrderSend(request,result)) {
-        PrintFormat("OrderSend error %d",GetLastError());
-    }
+  //   if(!OrderSend(request,result)) {
+  //       PrintFormat("OrderSend error %d",GetLastError());
+  //   }
 
-    int total2=PositionsTotal(); //　保有ポジション数
-    PrintFormat("total=%d", total2);
-  }
+  //   int total2=PositionsTotal(); //　保有ポジション数
+  //   PrintFormat("total=%d", total2);
+  // }
 
   // int macdHandle = iMACD(_Symbol, _Period, 12, 26, 9, PRICE_CLOSE);
   // if(macdHandle==INVALID_HANDLE) {
