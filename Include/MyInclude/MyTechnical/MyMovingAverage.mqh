@@ -1,6 +1,12 @@
 #include <Object.mqh>
 #include <Trade\Trade.mqh>
 #include <Indicators\Indicators.mqh>
+#import "Trade.ex5"
+    bool IsDeceptionTrade(ulong position_ticket, double allowed_percent);
+    bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket);
+#import
+
+#define MA_DECEPTION_ALLOWED_PERCENTAGE 0.05  //移動平均トレードの騙し判定許容パーセンテージ
 
 class MyMovingAverage {
     public:
@@ -15,6 +21,7 @@ class MyMovingAverage {
                             ENUM_APPLIED_PRICE applied_price
         );
         double MyMovingAverage::EntrySignalNormal(double &slow_ma_list[], double &fast_ma_list[]);
+        int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
 };
 
 //+------------------------------------------------------------------+
@@ -72,4 +79,22 @@ double MyMovingAverage::EntrySignalNormal(double &slow_ma_list[], double &fast_m
     }
 
     return ret;
+}
+
+/** 移動平均トレードの騙し判定監視
+ * 引数1: ポジションチケット
+ * return int
+**/
+int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
+    if (!IsDeceptionTrade(position_ticket, MA_DECEPTION_ALLOWED_PERCENTAGE)) {
+        return 0;
+    }
+    PrintFormat("移動平均トレード騙し判定、ポジションチケット=%d", position_ticket);
+    MqlTradeRequest settlement_request={};
+    MqlTradeResult settlement_result={};
+
+    if (!SettlementTrade(settlement_request, settlement_result, position_ticket)) {
+        return 0;
+    }
+    return 1;
 }

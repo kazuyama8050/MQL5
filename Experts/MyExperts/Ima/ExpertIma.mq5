@@ -10,8 +10,6 @@
 #include "include/ExpertIma.mqh"
 #import "Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
-    bool IsDeceptionTrade(ulong position_ticket, double allowed_percent);
-    bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket);
 #import
 #import "Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
@@ -24,7 +22,6 @@
 #define DEFAULT_TRADE_ACTION_DEAL 5  //デフォルト注文時価格の最大偏差
 #define MAGIC_NUMBER 123456
 #define COMMON_PERIOD PERIOD_M15 //期間（15分足）
-#define MA_DECEPTION_ALLOWED_PERCENTAGE 0.05  //移動平均トレードの騙し判定許容パーセンテージ
 const double loss_cut_line = 0.05;  //損切りライン
 
 static int ExpertIma::slow_ima_handle;
@@ -74,20 +71,6 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
     return true;
 }
 
-//移動平均トレードの騙し判定監視
-int ExpertIma::CheckAfterMaTrade(ulong position_ticket) {
-    if (IsDeceptionTrade(position_ticket, MA_DECEPTION_ALLOWED_PERCENTAGE)) {
-        PrintFormat("移動平均トレード騙し判定、ポジションチケット=%d", position_ticket);
-        MqlTradeRequest settlement_request={};
-        MqlTradeResult settlement_result={};
-
-        if (SettlementTrade(settlement_request, settlement_result, position_ticket)) {
-            ExpertIma::ma_settlement_num += 1;
-        }
-    }
-    return 1;
-}
-
 int ExpertIma::MaTrade() {
     bool can_trade = true;
     CopyBuffer(slow_ima_handle, 0, 0, 3, slow_ma);
@@ -131,7 +114,9 @@ bool ExpertIma::MainLoop() {
 
     // 前回移動平均トレードから30分未満の場合、騙し判定出なかったか監視する
     if (ExpertIma::ma_trade_last_datetime != NULL && ExpertIma::ma_trade_last_datetime <= check_ma_datetime - HALF_HOUR_DATETIME) {
-        ExpertIma::CheckAfterMaTrade(ExpertIma::ma_trade_last_position_ticket);
+        if (myMovingAverage.CheckAfterMaTrade(ExpertIma::ma_trade_last_position_ticket)) {
+            ExpertIma::ma_settlement_num += 1;
+        }
     }
     // 前回移動平均トレードから1時間以上経過していること
     if (ExpertIma::ma_trade_last_datetime == NULL || ExpertIma::ma_trade_last_datetime <= check_ma_datetime - ONE_HOUR_DATETIME) {
@@ -173,5 +158,6 @@ void OnTimer() {
 }
 
 void OnDeinit() {
+    Print("End!!");
     EventKillTimer();
 }
