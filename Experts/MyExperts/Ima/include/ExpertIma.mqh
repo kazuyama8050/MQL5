@@ -4,6 +4,7 @@ class ExpertIma {
         int ExpertIma::MaTrade();
         bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal);
         int ExpertIma::CheckAfterMaTrade(ulong position_ticket);
+        int ExpertIma::PrintTimerReport();
     public:
         static int ExpertIma::short_ima_handle; // 短期移動平均線
         static int ExpertIma::long_ima_handle; //長期移動平均線

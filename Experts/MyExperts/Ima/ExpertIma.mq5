@@ -41,6 +41,14 @@ MyLossCutTrade myLossCutTrade;
 MyMovingAverage myMovingAverage;
 ExpertIma expertIma;
 
+int ExpertIma::PrintTimerReport() {
+    PrintFormat("移動平均トレードのよる売買回数: %d", ExpertIma::ma_trade_num);
+    PrintFormat("移動平均トレードのよる騙し判定、%d回、%f％: %d", ExpertIma::ma_settlement_num, (ExpertIma::ma_settlement_num / ExpertIma::ma_trade_num * 100));
+    PrintFormat("強制決済回数: %d", ExpertIma::loss_cut_total_num);
+    PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);
+    return 1;
+}
+
 bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
     if (signal == 0) {return false;}
     double volume_deveation = 1.0;
@@ -159,15 +167,11 @@ void OnTick() {
 }
 
 void OnTimer() {
-    datetime watch_datetime = TimeLocal();
-    PrintFormat("タイマーイベント起動 %s", TimeToString(watch_datetime));
-    PrintFormat("移動平均トレードのよる売買回数: %d", ExpertIma::ma_trade_num);
-    PrintFormat("移動平均トレードのよる騙し判定、%d回、%f％: %d", ExpertIma::ma_settlement_num, (ExpertIma::ma_settlement_num / ExpertIma::ma_trade_num * 100));
-    PrintFormat("強制決済回数: %d", ExpertIma::loss_cut_total_num);
-    PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);
+    expertIma.PrintTimerReport();
 }
 
 void OnDeinit() {
+    expertIma.PrintTimerReport();
     Print("End!!");
     EventKillTimer();
 }
