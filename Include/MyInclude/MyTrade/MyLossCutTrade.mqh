@@ -37,7 +37,7 @@ int MyLossCutTrade::ClosePositionByLossCutRule(double loss_cut_line) {
     int total_position = PositionsTotal();  //保有ポジション数
     int loss_cut_num = 0;
 
-    for (int i = 0; i <= total_position; i++) {
+    for (int i = 0; i < total_position; i++) {
         ulong  position_ticket = PositionGetTicket(i);       // ポジションチケット
         double position_volume = PositionGetDouble(POSITION_VOLUME); // ポジションボリューム
         string position_symbol = PositionGetString(POSITION_SYMBOL);  //ポジションシンボル

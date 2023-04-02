@@ -1,0 +1,8 @@
+#define ONE_DATE_DATETIME 60
+#define HALF_HOUR_DATETIME 1800
+#define ONE_HOUR_DATETIME 3600
+#define ONE_DATE_DATETIME 86400
+
+class MyDatetime {
+
+};

@@ -5,10 +5,13 @@
 #include <MyInclude\MyAccount\MyAccountInfo.mqh>
 #include <MyInclude\MyTrade\MyLossCutTrade.mqh>
 #include <MyInclude\MyTechnical\MyMovingAverage.mqh>
+#include <MyInclude\MyCommon\MyDatetime.mqh>
 #include <Arrays\ArrayLong.mqh>
 #include "include/ExpertIma.mqh"
 #import "Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
+    bool IsDeceptionTrade(ulong position_ticket, double allowed_percent);
+    bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket);
 #import
 #import "Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
@@ -20,9 +23,8 @@
 #define DEFAULT_VOLUME 0.01  //デフォルト注文ボリューム
 #define DEFAULT_TRADE_ACTION_DEAL 5  //デフォルト注文時価格の最大偏差
 #define MAGIC_NUMBER 123456
-#define ONE_HOUR_DATETIME 3600
-#define ONE_DATE_DATETIME 86400
 #define COMMON_PERIOD PERIOD_M15 //期間（15分足）
+#define MA_DECEPTION_ALLOWED_PERCENTAGE 0.05  //移動平均トレードの騙し判定許容パーセンテージ
 const double loss_cut_line = 0.05;  //損切りライン
 
 static int ExpertIma::slow_ima_handle;
@@ -30,6 +32,9 @@ static int ExpertIma::fast_ima_handle;
 static int ExpertIma::trade_error_cnt = 0;
 static int ExpertIma::loss_cut_total_num = 0;
 static datetime ExpertIma::ma_trade_last_datetime;
+static ulong ExpertIma::ma_trade_last_position_ticket;
+static int ExpertIma::ma_trade_num = 0;
+static int ExpertIma::ma_settlement_num = 0;
 static double slow_ma[];
 static double fast_ma[];
 int ma_cnt = 0;
@@ -47,7 +52,7 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
     request.action = TRADE_ACTION_DEAL; //　取引操作タイプ
     request.symbol = Symbol(); // シンボル
     request.deviation = DEFAULT_TRADE_ACTION_DEAL; // 価格からの許容偏差
-    // request.magic = MAGIC_NUMBER; // 注文のMagicNumber（同一MT内でのEA識別）
+    request.magic = MAGIC_NUMBER; // 注文のMagicNumber（同一MT内でのEA識別）
     
     // 直近のボリュームリストを取得（チャート時間軸 × 10）
     CArrayLong volume_list;
@@ -67,6 +72,20 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
         request.price = SymbolInfoDouble(Symbol(),SYMBOL_BID);
     }
     return true;
+}
+
+//移動平均トレードの騙し判定監視
+int ExpertIma::CheckAfterMaTrade(ulong position_ticket) {
+    if (IsDeceptionTrade(position_ticket, MA_DECEPTION_ALLOWED_PERCENTAGE)) {
+        PrintFormat("移動平均トレード騙し判定、ポジションチケット=%d", position_ticket);
+        MqlTradeRequest settlement_request={};
+        MqlTradeResult settlement_result={};
+
+        if (SettlementTrade(settlement_request, settlement_result, position_ticket)) {
+            ExpertIma::ma_settlement_num += 1;
+        }
+    }
+    return 1;
 }
 
 int ExpertIma::MaTrade() {
@@ -98,16 +117,23 @@ int ExpertIma::MaTrade() {
                 ExpertIma::trade_error_cnt += 1;
             }
 
+            ExpertIma::ma_trade_num += 1;
             ExpertIma::ma_trade_last_datetime = TimeLocal();
+            ExpertIma::ma_trade_last_position_ticket = PositionGetTicket(PositionsTotal() - 1);
         }
     }
     return 1;
 }
 
 bool ExpertIma::MainLoop() {
+     datetime check_ma_datetime = TimeLocal();
     // 移動平均トレード
+
+    // 前回移動平均トレードから30分未満の場合、騙し判定出なかったか監視する
+    if (ExpertIma::ma_trade_last_datetime != NULL && ExpertIma::ma_trade_last_datetime <= check_ma_datetime - HALF_HOUR_DATETIME) {
+        ExpertIma::CheckAfterMaTrade(ExpertIma::ma_trade_last_position_ticket);
+    }
     // 前回移動平均トレードから1時間以上経過していること
-    datetime check_ma_datetime = TimeLocal();
     if (ExpertIma::ma_trade_last_datetime == NULL || ExpertIma::ma_trade_last_datetime <= check_ma_datetime - ONE_HOUR_DATETIME) {
         ExpertIma::MaTrade();
     }
@@ -140,6 +166,8 @@ void OnTick() {
 void OnTimer() {
     datetime watch_datetime = TimeLocal();
     PrintFormat("タイマーイベント起動 %s", TimeToString(watch_datetime));
+    PrintFormat("移動平均トレードのよる売買回数: %d", ExpertIma::ma_trade_num);
+    PrintFormat("移動平均トレードのよる騙し判定、%d回、%f％: %d", ExpertIma::ma_settlement_num, (ExpertIma::ma_settlement_num / ExpertIma::ma_trade_num * 100));
     PrintFormat("強制決済回数: %d", ExpertIma::loss_cut_total_num);
     PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);
 }

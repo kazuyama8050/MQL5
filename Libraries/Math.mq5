@@ -25,10 +25,7 @@ double MathMeanForLong(const CArrayLong &array) export {
     double mean = 0;
     for(int i = 0; i < size; i++) {
         mean += (double)array.At(i);
-        Print(array.At(i));
     }
-    Print(mean);
-    Print(size);
     mean = (double)mean / size;
     return mean;
 }
