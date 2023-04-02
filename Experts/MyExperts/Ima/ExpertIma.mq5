@@ -81,7 +81,17 @@ int ExpertIma::MaTrade() {
 
     // 注文
     if (ma_signal_ret != 0) {
-        //初期化
+
+        //ポジション決済
+        ENUM_POSITION_TYPE signal_position_type;
+        if (ma_signal_ret > 0) {
+            signal_position_type = POSITION_TYPE_BUY;
+        } else {
+            signal_position_type = POSITION_TYPE_SELL;
+        }
+        myMovingAverage.SettlementTradeByMaSignal(signal_position_type, MAGIC_NUMBER);
+
+        //注文
         MqlTradeRequest trade_request={};
         MqlTradeResult trade_result={};
 

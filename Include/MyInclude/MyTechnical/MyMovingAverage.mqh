@@ -22,6 +22,7 @@ class MyMovingAverage {
         );
         double MyMovingAverage::EntrySignalNormal(double &slow_ma_list[], double &fast_ma_list[]);
         int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
+        int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number);
 };
 
 //+------------------------------------------------------------------+
@@ -95,6 +96,51 @@ int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
 
     if (!SettlementTrade(settlement_request, settlement_result, position_ticket)) {
         return 0;
+    }
+    return 1;
+}
+
+/** 移動平均シグナル検知によるポジション決済
+ * 引数1: シグナルタイプが買いか売りか
+ * 引数2: magic_number 移動平均以外のトレードの決済はしない
+ * return int
+**/
+int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number) {
+    int total_position = PositionsTotal();  //保有ポジション数
+
+    for (int i = 0; i < total_position; i++) {
+        ulong  position_ticket = PositionGetTicket(i);
+        
+        ENUM_POSITION_TYPE position_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+        long position_magic = PositionGetInteger(POSITION_MAGIC);
+
+        //magic_numberが異なれば移動平均トレードでない
+        if (position_magic != magic_number) {
+            continue;
+        }
+
+        // シグナル判定が買い、売りでない
+        if (signal_position_type != POSITION_TYPE_BUY && signal_position_type != POSITION_TYPE_SELL) {
+            continue;
+        }
+
+        // ポジションタイプが買い、売りでない
+        if (position_type != POSITION_TYPE_BUY && position_type != POSITION_TYPE_SELL) {
+            continue;
+        }
+
+        //シグナルは判定とポジションタイプが同じ
+        if (signal_position_type == position_type) {
+            continue;
+        } 
+
+        MqlTradeRequest settlement_request={};
+        MqlTradeResult settlement_result={};
+
+        if (!SettlementTrade(settlement_request, settlement_result, position_ticket)) {
+            continue;
+        }
+
     }
     return 1;
 }
