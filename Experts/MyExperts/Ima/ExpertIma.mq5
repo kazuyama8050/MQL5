@@ -24,16 +24,16 @@
 #define COMMON_PERIOD PERIOD_M15 //期間（15分足）
 const double loss_cut_line = 0.05;  //損切りライン
 
-static int ExpertIma::slow_ima_handle;
-static int ExpertIma::fast_ima_handle;
+static int ExpertIma::short_ima_handle;
+static int ExpertIma::long_ima_handle;
 static int ExpertIma::trade_error_cnt = 0;
 static int ExpertIma::loss_cut_total_num = 0;
 static datetime ExpertIma::ma_trade_last_datetime;
 static ulong ExpertIma::ma_trade_last_position_ticket;
 static int ExpertIma::ma_trade_num = 0;
 static int ExpertIma::ma_settlement_num = 0;
-static double slow_ma[];
-static double fast_ma[];
+static double short_ma[];
+static double long_ma[];
 int ma_cnt = 0;
 
 MyAccountInfo myAccountInfo;
@@ -73,11 +73,11 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
 
 int ExpertIma::MaTrade() {
     bool can_trade = true;
-    CopyBuffer(slow_ima_handle, 0, 0, 3, slow_ma);
-    CopyBuffer(fast_ima_handle, 0, 0, 3, fast_ma);
+    CopyBuffer(short_ima_handle, 0, 0, 3, short_ma);
+    CopyBuffer(long_ima_handle, 0, 0, 3, long_ma);
 
     // 仕掛けシグナル
-    double ma_signal_ret = myMovingAverage.EntrySignalNormal(slow_ma, fast_ma);
+    double ma_signal_ret = myMovingAverage.EntrySignalNormal(short_ma, long_ma);
 
     // 注文
     if (ma_signal_ret != 0) {
@@ -144,10 +144,10 @@ void OnInit() {
     Print("Start!!");
     EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
 
-    ExpertIma::slow_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, COMMON_PERIOD, 25, 0, MODE_SMA, PRICE_CLOSE);
-    ExpertIma::fast_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, COMMON_PERIOD, 75, 0, MODE_SMA, PRICE_CLOSE);
-    ArraySetAsSeries(slow_ma, true);
-    ArraySetAsSeries(fast_ma, true);
+    ExpertIma::short_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, COMMON_PERIOD, 25, 0, MODE_SMA, PRICE_CLOSE);
+    ExpertIma::long_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, COMMON_PERIOD, 75, 0, MODE_SMA, PRICE_CLOSE);
+    ArraySetAsSeries(short_ma, true);
+    ArraySetAsSeries(long_ma, true);
 }
 
 void OnTick() {

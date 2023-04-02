@@ -5,8 +5,8 @@ class ExpertIma {
         bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal);
         int ExpertIma::CheckAfterMaTrade(ulong position_ticket);
     public:
-        static int ExpertIma::slow_ima_handle; // 短期移動平均線
-        static int ExpertIma::fast_ima_handle; //長期移動平均線
+        static int ExpertIma::short_ima_handle; // 短期移動平均線
+        static int ExpertIma::long_ima_handle; //長期移動平均線
         static int ExpertIma::trade_error_cnt; //注文エラー回数
         static int ExpertIma::loss_cut_total_num; //トータル強制決済回数
         static datetime ExpertIma::ma_trade_last_datetime; //移動平均を用いたラストトレード日時

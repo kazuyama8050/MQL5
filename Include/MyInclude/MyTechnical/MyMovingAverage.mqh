@@ -20,7 +20,7 @@ class MyMovingAverage {
                             ENUM_MA_METHOD ma_method, 
                             ENUM_APPLIED_PRICE applied_price
         );
-        double MyMovingAverage::EntrySignalNormal(double &slow_ma_list[], double &fast_ma_list[]);
+        double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_ma_list[]);
         int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
         int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number);
 };
@@ -65,18 +65,18 @@ int MyMovingAverage::CreateMaIndicator(
  * return double シグナル検知
  * ToDo 将来的に重み付けしたい
 **/ 
-double MyMovingAverage::EntrySignalNormal(double &slow_ma_list[], double &fast_ma_list[]) {
+double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_ma_list[]) {
     int ret = 0;
 
     //買いシグナル ゴールデンクロス
-    if (fast_ma_list[2] <= slow_ma_list[2] && fast_ma_list[1] > slow_ma_list[1]) {
+    if (long_ma_list[2] >= short_ma_list[2] && long_ma_list[1] < short_ma_list[1]) {
         ret = 1.0;
-        PrintFormat("買いシグナル発火、fast_ma2=%f <= slow_ma2=%f、fast_ma1=%f > slow_ma1=%f", fast_ma_list[2], slow_ma_list[2], fast_ma_list[1], slow_ma_list[1]);
+        PrintFormat("買いシグナル発火、long_ma2=%f <= short_ma2=%f、long_ma1=%f > short_ma1=%f", long_ma_list[2], short_ma_list[2], long_ma_list[1], short_ma_list[1]);
     }
     //売りシグナル デッドクロス
-    if (fast_ma_list[2] >= slow_ma_list[2] && fast_ma_list[1] < slow_ma_list[1]) {
+    if (long_ma_list[2] <= short_ma_list[2] && long_ma_list[1] > short_ma_list[1]) {
         ret = -1.0;
-        PrintFormat("売りシグナル発火、fast_ma2=%f >= slow_ma2=%f、fast_ma1=%f < slow_ma1=%f", fast_ma_list[2], slow_ma_list[2], fast_ma_list[1], slow_ma_list[1]);
+        PrintFormat("売りシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma1=%f < short_ma1=%f", long_ma_list[2], short_ma_list[2], long_ma_list[1], short_ma_list[1]);
     }
 
     return ret;
