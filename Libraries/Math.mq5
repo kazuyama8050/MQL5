@@ -9,6 +9,7 @@
 #property version   "1.00"
 
 #include <Arrays\ArrayLong.mqh>
+#include <Arrays\ArrayDouble.mqh>
 //+------------------------------------------------------------------+
 //| My function                                                      |
 //+------------------------------------------------------------------+
@@ -25,6 +26,18 @@ double MathMeanForLong(const CArrayLong &array) export {
     double mean = 0;
     for(int i = 0; i < size; i++) {
         mean += (double)array.At(i);
+    }
+    mean = (double)mean / size;
+    return mean;
+}
+
+double MathMeanForDouble(const CArrayDouble &array) export {
+    int size = array.Total();
+    if(size < 1) {return(0.0);}
+        
+    double mean = 0;
+    for(int i = 0; i < size; i++) {
+        mean += array.At(i);
     }
     mean = (double)mean / size;
     return mean;

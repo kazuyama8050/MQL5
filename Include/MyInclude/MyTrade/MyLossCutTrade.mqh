@@ -67,6 +67,7 @@ bool MyLossCutTrade::CreateLossCutTradeRequest(string position_symbol, int posit
     close_request.symbol = position_symbol;
     close_request.volume = position_volume;
     close_request.deviation = 5;
+    close_request.comment = StringFormat("強制ロスカット、ポジション番号=%d", position_ticket);
 
     if (position_type == POSITION_TYPE_BUY) {
         close_request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);

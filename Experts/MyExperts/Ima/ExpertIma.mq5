@@ -13,6 +13,7 @@
 #import
 #import "Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    int GetPriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
 #import
 #import "Math.ex5"
     double MathMeanForLong(const CArrayLong &array);
@@ -32,8 +33,8 @@ static datetime ExpertIma::ma_trade_last_datetime;
 static ulong ExpertIma::ma_trade_last_position_ticket;
 static int ExpertIma::ma_trade_num = 0;
 static int ExpertIma::ma_settlement_num = 0;
-static double short_ma[];
-static double long_ma[];
+static double short_ma[];  //短期移動平均を格納する配列
+static double long_ma[];  //長期移動平均を格納する配列
 int ma_cnt = 0;
 
 MyAccountInfo myAccountInfo;
@@ -58,6 +59,7 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
     request.symbol = Symbol(); // シンボル
     request.deviation = DEFAULT_TRADE_ACTION_DEAL; // 価格からの許容偏差
     request.magic = MAGIC_NUMBER; // 注文のMagicNumber（同一MT内でのEA識別）
+    request.comment = "移動平均によるシグナル検知";
     
     // 直近のボリュームリストを取得（チャート時間軸 × 10）
     CArrayLong volume_list;
@@ -81,11 +83,20 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
 
 int ExpertIma::MaTrade() {
     bool can_trade = true;
-    CopyBuffer(short_ima_handle, 0, 0, 3, short_ma);
-    CopyBuffer(long_ima_handle, 0, 0, 3, long_ma);
+    CopyBuffer(short_ima_handle, 0, 0, 10, short_ma);
+    CopyBuffer(long_ima_handle, 0, 0, 10, long_ma);
+
+    // 直近の価格リストを取得（チャート時間軸 × 10）
+    CArrayDouble price_list;
+    GetPriceList(price_list, Symbol(), COMMON_PERIOD, 10);
 
     // 仕掛けシグナル
-    double ma_signal_ret = myMovingAverage.EntrySignalNormal(short_ma, long_ma);
+    double ma_signal_ret = myMovingAverage.EntrySignalNormal(short_ma, long_ma, price_list);
+
+    // 仕掛けシグナル判定出ない時はトレンドを読み取って決済判定
+    if (ma_signal_ret == 0) {
+        myMovingAverage.SettlementTradeByMaTrendSignal(short_ma, 2, MAGIC_NUMBER);
+    }
 
     // 注文
     if (ma_signal_ret != 0) {
@@ -144,7 +155,7 @@ bool ExpertIma::MainLoop() {
     //損切りライン確認 & 決済実行
     ExpertIma::loss_cut_total_num += myLossCutTrade.ClosePositionByLossCutRule(loss_cut_line);
 
-    Sleep(10000); // 10秒スリープ
+    // Sleep(10000); // 10秒スリープ
     return true;
 }
 

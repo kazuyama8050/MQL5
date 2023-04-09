@@ -78,9 +78,10 @@ bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response) 
  * 引数1: MqlTradeRequest構造体
  * 引数2: MqlTradeResult構造体
  * 引数3: ポジションチケット
+ * 引数4: コメント（決済に至った原因など）
  * return bool
  **/
-bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket) export {
+bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, string comment) export {
     PositionSelectByTicket(position_ticket);
     double position_volume = PositionGetDouble(POSITION_VOLUME);
     string position_symbol = PositionGetString(POSITION_SYMBOL);
@@ -94,6 +95,7 @@ bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settle
     settlement_request.symbol = position_symbol;
     settlement_request.volume = position_volume;
     settlement_request.deviation = 5;
+    settlement_request.comment = comment;
 
     if (position_type == POSITION_TYPE_BUY) {
         settlement_request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
