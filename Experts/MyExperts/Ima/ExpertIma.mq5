@@ -99,11 +99,11 @@ int ExpertIma::MaTrade() {
     // 仕掛けシグナル判定出ない時はトレンドを読み取って決済判定
     if (ma_signal_ret == 0) {
         if (myMovingAverage.SettlementTradeByMaTrendSignal(short_ma, 2, MAGIC_NUMBER)) {
-            // ExpertIma::ma_settlement_num += 1;
+            
         }
     }
 
-    // 注文
+    // 仕掛けシグナル発火
     if (ma_signal_ret != 0) {
 
         //ポジション決済
@@ -114,7 +114,7 @@ int ExpertIma::MaTrade() {
             signal_position_type = POSITION_TYPE_SELL;
         }
         if (myMovingAverage.SettlementTradeByMaSignal(signal_position_type, MAGIC_NUMBER)) {
-            // ExpertIma::ma_settlement_num += 1;
+            
         }
 
         //注文
