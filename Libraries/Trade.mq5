@@ -165,3 +165,27 @@ bool IsDeceptionTrade(ulong position_ticket, double allowed_percent) export {
     }
     return false;
 }
+
+double GetSettlementProfit(ulong position_ticket) export {
+    HistorySelect(0,TimeCurrent());
+    double position_profit = HistoryDealGetDouble(position_ticket, DEAL_PROFIT);
+    return position_profit;
+}
+
+double GetTotalSettlementProfit() export {
+    // 全ての取引履歴を取得
+    // テストトレードの場合、最初の取引履歴は入金となる
+    HistorySelect(0,TimeCurrent());
+    int history_num = HistoryDealsTotal();
+    double total_profit = 0.0;
+
+    for(int i = 0;i < history_num;i++) {
+        ulong deal_ticket = HistoryDealGetTicket(i);
+        if(deal_ticket == 0) {
+            Print("取引履歴の取得失敗");
+            break;
+        }
+        total_profit += GetSettlementProfit(deal_ticket);
+    }
+    return total_profit;
+}

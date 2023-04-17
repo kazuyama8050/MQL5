@@ -10,6 +10,7 @@
 #include "include/ExpertIma.mqh"
 #import "Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
+    double GetTotalSettlementProfit();
 #import
 #import "Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
@@ -18,11 +19,10 @@
 #import "Math.ex5"
     double MathMeanForLong(const CArrayLong &array);
 #import
+#import "Common.ex5"
+    void ForceStopEa();
+#import
 
-#define DEFAULT_VOLUME 0.01  //デフォルト注文ボリューム
-#define DEFAULT_TRADE_ACTION_DEAL 5  //デフォルト注文時価格の最大偏差
-#define MAGIC_NUMBER 123456
-#define COMMON_PERIOD PERIOD_M15 //期間（15分足）
 const double loss_cut_line = 0.05;  //損切りライン
 
 static int ExpertIma::short_ima_handle;
@@ -33,6 +33,7 @@ static datetime ExpertIma::ma_trade_last_datetime;
 static ulong ExpertIma::ma_trade_last_position_ticket;
 static int ExpertIma::ma_trade_num = 0;
 static int ExpertIma::ma_settlement_num = 0;
+static int MyMovingAverage::ma_trade_loss_cnt = 0;
 static double short_ma[];  //短期移動平均を格納する配列
 static double long_ma[];  //長期移動平均を格納する配列
 int ma_cnt = 0;
@@ -43,10 +44,12 @@ MyMovingAverage myMovingAverage;
 ExpertIma expertIma;
 
 int ExpertIma::PrintTimerReport() {
-    PrintFormat("移動平均トレードのよる売買回数: %d", ExpertIma::ma_trade_num);
-    PrintFormat("移動平均トレードのよる騙し判定、%d回、%f％: %d", ExpertIma::ma_settlement_num, (ExpertIma::ma_settlement_num / ExpertIma::ma_trade_num * 100));
+    PrintFormat("移動平均トレードによる売買回数: %d回、損切り回数：%d", ExpertIma::ma_trade_num, MyMovingAverage::ma_trade_loss_cnt);
+    PrintFormat("移動平均トレードによる騙し判定：、%d回、%f％", ExpertIma::ma_settlement_num, (ExpertIma::ma_settlement_num / ExpertIma::ma_trade_num * 100));
     PrintFormat("強制決済回数: %d", ExpertIma::loss_cut_total_num);
     PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);
+    double total_profit = GetTotalSettlementProfit();
+    PrintFormat("現在までの累積損益：%f円", total_profit);
     return 1;
 }
 
@@ -95,7 +98,9 @@ int ExpertIma::MaTrade() {
 
     // 仕掛けシグナル判定出ない時はトレンドを読み取って決済判定
     if (ma_signal_ret == 0) {
-        myMovingAverage.SettlementTradeByMaTrendSignal(short_ma, 2, MAGIC_NUMBER);
+        if (myMovingAverage.SettlementTradeByMaTrendSignal(short_ma, 2, MAGIC_NUMBER)) {
+            // ExpertIma::ma_settlement_num += 1;
+        }
     }
 
     // 注文
@@ -108,7 +113,9 @@ int ExpertIma::MaTrade() {
         } else {
             signal_position_type = POSITION_TYPE_SELL;
         }
-        myMovingAverage.SettlementTradeByMaSignal(signal_position_type, MAGIC_NUMBER);
+        if (myMovingAverage.SettlementTradeByMaSignal(signal_position_type, MAGIC_NUMBER)) {
+            // ExpertIma::ma_settlement_num += 1;
+        }
 
         //注文
         MqlTradeRequest trade_request={};
@@ -155,7 +162,7 @@ bool ExpertIma::MainLoop() {
     //損切りライン確認 & 決済実行
     ExpertIma::loss_cut_total_num += myLossCutTrade.ClosePositionByLossCutRule(loss_cut_line);
 
-    // Sleep(10000); // 10秒スリープ
+    Sleep(10000); // 10秒スリープ
     return true;
 }
 
@@ -171,8 +178,7 @@ void OnInit() {
 
 void OnTick() {
     if (!expertIma.MainLoop()) {
-        Alert("予期せぬエラーが発生しました。");
-        ExpertRemove();
+        ForceStopEa();
         return;
     }
 }

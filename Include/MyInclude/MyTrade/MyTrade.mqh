@@ -1,14 +1,31 @@
 #include <Object.mqh>
 #include <Trade\Trade.mqh>
-#import "Trade.ex5"
-    int PrintTradeResponseMessage(MqlTradeResult &order_response);
-    bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
-    bool IsLossCutPosition(string position_symbol, double position_price, double rule_percent ENUM_POSITION_TYPE position_type);
+#include <MyInclude\MyFile\MyFileHandler.mqh>
+#import "File.ex5"
+    int CreateReadableFileHandler(string filepath, string separate_string, int code_type = DEFAULT_FILE_CODE_TYPE);
 #import
 
-#define PRICE_DIFF_MEAN_OF_15_MINUTES 0.065
+#define PRICE_DIFF_MEAN_OF_15_MINUTES 0.065  //15分足の価格差平均値
+
 
 class MyTrade {
     public:
+
+    public:
+        MyTrade();
+        ~MyTrade();
+
 };
 
+//+------------------------------------------------------------------+
+//| Constructor                                                      |
+//+------------------------------------------------------------------+
+MyTrade::MyTrade()
+  {
+  }
+//+------------------------------------------------------------------+
+//| Destructor                                                       |
+//+------------------------------------------------------------------+
+MyTrade::~MyTrade()
+  {
+  }

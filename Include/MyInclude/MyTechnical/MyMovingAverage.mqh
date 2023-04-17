@@ -1,17 +1,31 @@
 #include <Object.mqh>
 #include <Trade\Trade.mqh>
 #include <Indicators\Indicators.mqh>
+#include <MyInclude\MyTrade\MyTrade.mqh>
+#include <MyInclude\MyFile\MyFileHandler.mqh>
+#include "../../../Experts/MyExperts/Ima/include/ExpertIma.mqh"
 #import "Trade.ex5"
     bool IsDeceptionTrade(ulong position_ticket, double allowed_percent);
     bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, string comment);
+    double GetSettlementProfit(ulong position_ticket);
 #import
 #import "Math.ex5"
     double MathMeanForDouble(const CArrayDouble &array);
+    double MathDiffMeanForDouble(const CArrayDouble &array);
+#import
+#import "File.ex5"
+    string GetValueOfFileKey(int file_handle, string key);
+#import
+#import "Common.ex5"
+    void ForceStopEa();
 #import
 
 #define MA_DECEPTION_ALLOWED_PERCENTAGE 0.05  //移動平均トレードの騙し判定許容パーセンテージ
 
 class MyMovingAverage {
+    public:
+        double price_diff_mean;
+        static int MyMovingAverage::ma_trade_loss_cnt;
     public:
         MyMovingAverage();
         ~MyMovingAverage();
@@ -33,14 +47,24 @@ class MyMovingAverage {
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
 MyMovingAverage::MyMovingAverage()
-  {
-  }
+{
+    MyFileHandler myFileHandler(PRICE_DIFF_MEAN_FILEPATH, FILE_READ|FILE_WRITE, TSV_SEPARATE_STRING);
+    int file_handle = myFileHandler.CreateFileHandler();
+    if (!file_handle) {
+        ForceStopEa();
+    }
+    string price_diff_mean_str = GetValueOfFileKey(file_handle, IntegerToString(COMMON_PERIOD));
+    price_diff_mean = StringToDouble(price_diff_mean_str);
+    if (price_diff_mean <= 0) {
+        price_diff_mean = PRICE_DIFF_MEAN_OF_15_MINUTES;  //暫定で入れておく
+    }
+}
 //+------------------------------------------------------------------+
 //| Destructor                                                       |
 //+------------------------------------------------------------------+
 MyMovingAverage::~MyMovingAverage()
-  {
-  }
+{
+}
 
 /** ma handler 作成
  * 
@@ -76,21 +100,27 @@ double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_
     int price_list_num = price_list.Total();
     double price_mean = MathMeanForDouble(price_list);
     double current_price = price_list.At(0);
+    double price_list_diff_mean = MathDiffMeanForDouble(price_list);
+    
 
     //買いシグナル ゴールデンクロス
-    if (long_ma_list[2] >= short_ma_list[2] && long_ma_list[1] < short_ma_list[1]) {
+    if (long_ma_list[1] >= short_ma_list[1] && long_ma_list[0] < short_ma_list[0]) {
+        PrintFormat("diff=%f, const=%f", price_list_diff_mean, price_diff_mean);
         // 上昇トレンド中 （直近価格が平均より高いとしておく）
         if (price_mean < current_price) {
+            PrintFormat("mean=%f, current=%f, total=%d", price_mean, current_price, price_list_num);
             ret = 1.0;
-            PrintFormat("買いシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma1=%f < short_ma1=%f", long_ma_list[2], short_ma_list[2], long_ma_list[1], short_ma_list[1]);
+            PrintFormat("買いシグナル発火、long_ma1=%f >= short_ma1=%f、long_ma0=%f < short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
         }
     }
     //売りシグナル デッドクロス
-    if (long_ma_list[2] <= short_ma_list[2] && long_ma_list[1] > short_ma_list[1]) {
+    if (long_ma_list[1] <= short_ma_list[1] && long_ma_list[0] > short_ma_list[0]) {
+        PrintFormat("diff=%f, const=%f", price_list_diff_mean, price_diff_mean);
         // 下降トレンド中 （直近価格が平均より低いとしておく）
         if (price_mean > current_price) {
+            PrintFormat("mean=%f, current=%f, total=%d", price_mean, current_price, price_list_num);
             ret = -1.0;
-            PrintFormat("売りシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma1=%f > short_ma1=%f", long_ma_list[2], short_ma_list[2], long_ma_list[1], short_ma_list[1]);
+            PrintFormat("売りシグナル発火、long_ma1=%f >= short_ma1=%f、long_ma10=%f > short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
         }
     }
 
@@ -113,6 +143,9 @@ int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
 
     if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
         return 0;
+    }
+    if (GetSettlementProfit(settlement_result.deal) < 0.0) {
+        MyMovingAverage::ma_trade_loss_cnt += 1;
     }
     return 1;
 }
@@ -162,6 +195,10 @@ int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int
             continue;
         }
 
+        if (GetSettlementProfit(settlement_result.deal) < 0.0) {
+            MyMovingAverage::ma_trade_loss_cnt += 1;
+        }
+
     }
     return 1;
 }
@@ -202,6 +239,10 @@ int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_positio
 
         if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
             continue;
+        }
+
+        if (GetSettlementProfit(settlement_result.deal) < 0.0) {
+            MyMovingAverage::ma_trade_loss_cnt += 1;
         }
 
     }

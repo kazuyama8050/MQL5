@@ -13,11 +13,6 @@
 //+------------------------------------------------------------------+
 //| My function                                                      |
 //+------------------------------------------------------------------+
-// int MyCalculator(int value,int value2) export
-//   {
-//    return(value+value2);
-//   }
-//+------------------------------------------------------------------+
 
 double MathMeanForLong(const CArrayLong &array) export {
     int size = array.Total();
@@ -41,4 +36,20 @@ double MathMeanForDouble(const CArrayDouble &array) export {
     }
     mean = (double)mean / size;
     return mean;
+}
+
+//配列の各要素ごとの差分の平均値算出
+double MathDiffMeanForDouble(const CArrayDouble &array) export {
+    double diff_mean = 0.0;
+    int size = array.Total();
+    if(size < 1) {return(0.0);}
+
+    for (int i = 0; i < array.Total() - 1; i++) {
+        double diff1 = array.At(i);
+        double diff2 = array.At(i + 1);
+        double diff_ret = MathAbs(diff1 - diff2);
+        diff_mean += diff_ret;
+    }
+    diff_mean = diff_mean / size;
+    return diff_mean;
 }

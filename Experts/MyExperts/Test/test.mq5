@@ -7,6 +7,7 @@
 #include <Object.mqh>
 #include <Arrays\ArrayDouble.mqh>
 #include <Trade\Trade.mqh>
+#include <Files\File.mqh>
 
 #import "Math.ex5"
     double MathMeanForDouble(const CArrayDouble &array);
@@ -14,6 +15,8 @@
 
 input int shift=0;
 #define MAGIC_NUMBER_TEST = 123456;
+
+CFile cFile;
 
 /** tickごとの価格差平均値算出
  * 引数1: 時間軸
@@ -40,6 +43,27 @@ void PrintPriceDiffMean(ENUM_TIMEFRAMES timeframe, int data_num) {
 
 void OnInit() {
     // tickごとの価格差平均値算出
-    PrintPriceDiffMean(PERIOD_M15, 5000);
     // PrintPriceDiffMean(PERIOD_M15, 5000);
+    // PrintPriceDiffMean(PERIOD_M15, 5000);
+
+    string filename="Conf\\price_diff_mean.tsv";
+    int fileHandle = FileOpen(filename, FILE_READ|FILE_WRITE, '\t', 932);
+    Print(FileIsExist(filename));
+
+    if (fileHandle == INVALID_HANDLE) {
+        Print("Error File Open");
+    }
+    PrintFormat("size=%d", FileSize(fileHandle));
+
+    string BuySignal;
+
+    while(!FileIsEnding(fileHandle)) {
+        BuySignal=FileReadString(fileHandle);
+        // Print(BuySignal);
+    }
+
+    // FileWrite(fileHandle, IntegerToString(PERIOD_M15) + "\t0.065");
+    
+    FileClose(fileHandle);
+
 }

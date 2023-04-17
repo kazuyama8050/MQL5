@@ -1,3 +1,8 @@
+#define DEFAULT_VOLUME 0.01  //デフォルト注文ボリューム
+#define DEFAULT_TRADE_ACTION_DEAL 5  //デフォルト注文時価格の最大偏差
+#define MAGIC_NUMBER 123456
+#define COMMON_PERIOD PERIOD_M15 //期間（15分足）
+
 class ExpertIma {
     public:
         bool ExpertIma::MainLoop();
