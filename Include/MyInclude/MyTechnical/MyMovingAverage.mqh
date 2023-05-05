@@ -112,7 +112,7 @@ int MyMovingAverage::CreateMaIndicator(
  * ToDo 将来的に重み付けしたい
 **/ 
 double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_ma_list[], CArrayDouble &price_list) {
-    int ret = 0;
+    double ret = 0.0;
 
     int price_list_num = price_list.Total();
     double price_mean = MathMeanForDouble(price_list);
