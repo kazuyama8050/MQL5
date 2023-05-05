@@ -124,7 +124,7 @@ double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_
         // 上昇トレンド中 （直近価格が平均より高いとしておく）
         if (price_mean < current_price) {
             ret = 1.0;
-            PrintFormat("買いシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f < short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
+            PrintFormat("買いシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f < short_ma0=%f", long_ma_list[2], short_ma_list[2], long_ma_list[0], short_ma_list[0]);
         }
     }
     //売りシグナル デッドクロス
@@ -132,7 +132,7 @@ double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_
         // 下降トレンド中 （直近価格が平均より低いとしておく）
         if (price_mean > current_price) {
             ret = -1.0;
-            PrintFormat("売りシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f > short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
+            PrintFormat("売りシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f > short_ma0=%f", long_ma_list[2], short_ma_list[2], long_ma_list[0], short_ma_list[0]);
         }
     }
 
