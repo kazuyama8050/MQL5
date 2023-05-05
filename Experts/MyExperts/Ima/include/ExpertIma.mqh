@@ -3,6 +3,12 @@
 #define MAGIC_NUMBER 123456
 #define COMMON_PERIOD PERIOD_M15 //期間（15分足）
 
+#include <Arrays\ArrayLong.mqh>
+#include <Arrays\ArrayInt.mqh>
+#include <Arrays\ArrayDouble.mqh>
+
+
+
 class ExpertIma {
     public:
         bool ExpertIma::MainLoop();

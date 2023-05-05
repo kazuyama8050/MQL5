@@ -166,6 +166,10 @@ bool IsDeceptionTrade(ulong position_ticket, double allowed_percent) export {
     return false;
 }
 
+/** 決済済みチケットの損益取得
+ * 引数1：ポジションチケット
+ * return double 損益
+**/
 double GetSettlementProfit(ulong position_ticket) export {
     HistorySelect(0,TimeCurrent());
     double position_profit = HistoryDealGetDouble(position_ticket, DEAL_PROFIT);

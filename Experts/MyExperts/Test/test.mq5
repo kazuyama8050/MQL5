@@ -6,11 +6,16 @@
 
 #include <Object.mqh>
 #include <Arrays\ArrayDouble.mqh>
+#include <Arrays\ArrayLong.mqh>
 #include <Trade\Trade.mqh>
 #include <Files\File.mqh>
 
 #import "Math.ex5"
     double MathMeanForDouble(const CArrayDouble &array);
+#import
+#import "Indicator.ex5"
+    int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    int GetPriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
 #import
 
 input int shift=0;
@@ -41,10 +46,32 @@ void PrintPriceDiffMean(ENUM_TIMEFRAMES timeframe, int data_num) {
     PrintFormat("tickごとの価格差平均値=%f", price_diff_mean / (price_list.Total() - 1));
 }
 
+void PrintVolumeList() {
+    CArrayLong volume_list;
+    GetVolumeList(volume_list, Symbol(), PERIOD_M15, 10);
+
+    for (int i=0;i<volume_list.Total();i++) {
+        PrintFormat("volume[%d]=%f", i, volume_list.At(i));
+    }
+    
+}
+
+void PrintPriceList() {
+    CArrayDouble price_list;
+    GetPriceList(price_list, Symbol(), PERIOD_M15, 10);
+
+    for (int i=0;i<price_list.Total();i++) {
+        PrintFormat("price[%d]=%f", i, price_list.At(i));
+    }
+    
+}
+
 void OnInit() {
     // tickごとの価格差平均値算出
     // PrintPriceDiffMean(PERIOD_M15, 5000);
     // PrintPriceDiffMean(PERIOD_M15, 5000);
+    PrintVolumeList();
+    PrintPriceList();
 
     string filename="Conf\\price_diff_mean.tsv";
     int fileHandle = FileOpen(filename, FILE_READ|FILE_WRITE, '\t', 932);

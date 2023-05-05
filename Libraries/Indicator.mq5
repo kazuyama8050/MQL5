@@ -24,7 +24,7 @@
 **/
 int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift) export {
     if (volume_list.Total() > 0) {return 0;}
-    for (int i = 1; i < shift; i++) {
+    for (int i = 0; i < shift; i++) {
         volume_list.Insert(iVolume(symbol, timeframe, i), i);
     }
     return 1;
@@ -40,7 +40,7 @@ int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timefr
 int GetPriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift) export {
     if (price_list.Total() > 0) {return 0;}
     
-    for (int i = 1; i < shift; i++) {
+    for (int i = 0; i < shift; i++) {
         price_list.Insert(iClose(symbol, timeframe, i), i);
     }
     return 1;

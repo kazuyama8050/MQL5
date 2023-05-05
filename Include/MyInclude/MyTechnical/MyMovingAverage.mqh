@@ -20,11 +20,21 @@
     void ForceStopEa();
 #import
 
-#define MA_DECEPTION_ALLOWED_PERCENTAGE 0.05  //移動平均トレードの騙し判定許容パーセンテージ
+#define MA_DECEPTION_ALLOWED_PERCENTAGE 0.03  //移動平均トレードの騙し判定許容パーセンテージ
+
+struct maTradeHistory
+{
+    ulong position_ticket;
+    double current_price_and_ma_diff;
+    ulong deal_ticket;
+    double profit;
+    int is_benefit;
+};
 
 class MyMovingAverage {
     public:
         double price_diff_mean;
+        static maTradeHistory MyMovingAverage::ma_trade_history_list[];  //移動平均トレード履歴構造体
         static int MyMovingAverage::ma_trade_loss_cnt;
     public:
         MyMovingAverage();
@@ -40,7 +50,11 @@ class MyMovingAverage {
         double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_ma_list[], CArrayDouble &price_list);
         int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
         int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number);
-        int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_target, long magic_number);
+        int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_term, long magic_number);
+        int MyMovingAverage::SetMaTradeHistoryForTrade(MqlTradeResult &trade_result, CArrayDouble &price_list, double &short_ma_list[]);
+
+    private:
+        int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong deal_ticket, double position_deal_profit);
 };
 
 //+------------------------------------------------------------------+
@@ -58,6 +72,9 @@ MyMovingAverage::MyMovingAverage()
     if (price_diff_mean <= 0) {
         price_diff_mean = PRICE_DIFF_MEAN_OF_15_MINUTES;  //暫定で入れておく
     }
+
+    ArraySetAsSeries(MyMovingAverage::ma_trade_history_list,false);
+    ZeroMemory(MyMovingAverage::ma_trade_history_list);
 }
 //+------------------------------------------------------------------+
 //| Destructor                                                       |
@@ -88,8 +105,8 @@ int MyMovingAverage::CreateMaIndicator(
 }
 
 /** 移動平均のエントリシグナル検知
- * 引数1: 短期移動平均リスト
- * 引数2: 長期移動平均リスト
+ * 引数1: 短期移動平均リスト（要素数3以上）
+ * 引数2: 長期移動平均リスト（要素数3以上）
  * 引数3: 直近からの価格リスト
  * return double シグナル検知
  * ToDo 将来的に重み付けしたい
@@ -102,25 +119,20 @@ double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_
     double current_price = price_list.At(0);
     double price_list_diff_mean = MathDiffMeanForDouble(price_list);
     
-
     //買いシグナル ゴールデンクロス
-    if (long_ma_list[1] >= short_ma_list[1] && long_ma_list[0] < short_ma_list[0]) {
-        PrintFormat("diff=%f, const=%f", price_list_diff_mean, price_diff_mean);
+    if (long_ma_list[2] >= short_ma_list[2] && long_ma_list[0] < short_ma_list[0]) {
         // 上昇トレンド中 （直近価格が平均より高いとしておく）
         if (price_mean < current_price) {
-            PrintFormat("mean=%f, current=%f, total=%d", price_mean, current_price, price_list_num);
             ret = 1.0;
-            PrintFormat("買いシグナル発火、long_ma1=%f >= short_ma1=%f、long_ma0=%f < short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
+            PrintFormat("買いシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f < short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
         }
     }
     //売りシグナル デッドクロス
-    if (long_ma_list[1] <= short_ma_list[1] && long_ma_list[0] > short_ma_list[0]) {
-        PrintFormat("diff=%f, const=%f", price_list_diff_mean, price_diff_mean);
+    if (long_ma_list[2] <= short_ma_list[2] && long_ma_list[0] >= short_ma_list[0]) {
         // 下降トレンド中 （直近価格が平均より低いとしておく）
         if (price_mean > current_price) {
-            PrintFormat("mean=%f, current=%f, total=%d", price_mean, current_price, price_list_num);
             ret = -1.0;
-            PrintFormat("売りシグナル発火、long_ma1=%f >= short_ma1=%f、long_ma10=%f > short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
+            PrintFormat("売りシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f > short_ma0=%f", long_ma_list[1], short_ma_list[1], long_ma_list[0], short_ma_list[0]);
         }
     }
 
@@ -135,7 +147,6 @@ int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
     if (!IsDeceptionTrade(position_ticket, MA_DECEPTION_ALLOWED_PERCENTAGE)) {
         return 0;
     }
-    PrintFormat("移動平均トレード騙し判定、ポジションチケット=%d", position_ticket);
     MqlTradeRequest settlement_request={};
     MqlTradeResult settlement_result={};
 
@@ -144,18 +155,21 @@ int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
     if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
         return 0;
     }
-    if (GetSettlementProfit(settlement_result.deal) < 0.0) {
+
+    double position_deal_profit = GetSettlementProfit(settlement_result.deal);
+    if (position_deal_profit < 0.0) {
         MyMovingAverage::ma_trade_loss_cnt += 1;
     }
+    MyMovingAverage::SetMaTradeHistoryForSettlement(position_ticket, settlement_result.deal, position_deal_profit);
     return 1;
 }
 
 /** 移動平均トレンドシグナル検知によるポジション決済
  * 引数1: 短期移動平均リストのポインタ
- * 引数2: 比較対象の移動平均対象
+ * 引数2: 比較対象の移動平均対象期間（tick数指定）
  * 引数3: magic_number 移動平均以外のトレードの決済はしない
 **/
-int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_target, long magic_number) {
+int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_term, long magic_number) {
     int total_position = PositionsTotal();
 
     for (int i = 0; i < total_position; i++) {
@@ -169,20 +183,22 @@ int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int
             continue;
         }
 
-        // 時系列データは新しい順に要素1スタート
-        double compare_target_ma = short_ma_list[compare_target + 1];
+        int is_settlement = 1;
+        for (int i = compare_term;i > 0;i--) {
+            // 買いポジションの場合、期間中に一回でも上昇トレンドのままなら何もしない
+            if (position_type == POSITION_TYPE_BUY) {
+                if (short_ma_list[i - 1] > short_ma_list[i]) {
+                    is_settlement = 0;
+                }
+            // 売りポジションの場合、期間中に一回でも下落トレンドのままなら何もしない
+            } else if (position_type == POSITION_TYPE_SELL) {
+                if (short_ma_list[i - 1] < short_ma_list[i]) {
+                    is_settlement = 0;
+                }
+            }
+        }
 
-        // 買いポジションの場合、上昇トレンドのままなら何もしない
-        if (position_type == POSITION_TYPE_BUY) {
-            if (short_ma_list[1] > compare_target_ma) {
-                continue;
-            }
-        // 売りポジションの場合、下落トレンドのままなら何もしない
-        } else if (position_type == POSITION_TYPE_SELL) {
-            if (short_ma_list[1] < compare_target_ma) {
-                continue;
-            }
-        } else {
+        if (!is_settlement) {
             continue;
         }
 
@@ -195,10 +211,11 @@ int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int
             continue;
         }
 
-        if (GetSettlementProfit(settlement_result.deal) < 0.0) {
+        double position_deal_profit = GetSettlementProfit(settlement_result.deal);
+        if (position_deal_profit < 0.0) {
             MyMovingAverage::ma_trade_loss_cnt += 1;
         }
-
+        MyMovingAverage::SetMaTradeHistoryForSettlement(position_ticket, settlement_result.deal, position_deal_profit);
     }
     return 1;
 }
@@ -241,10 +258,37 @@ int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_positio
             continue;
         }
 
-        if (GetSettlementProfit(settlement_result.deal) < 0.0) {
+        double position_deal_profit = GetSettlementProfit(settlement_result.deal);
+        if (position_deal_profit < 0.0) {
             MyMovingAverage::ma_trade_loss_cnt += 1;
         }
+        MyMovingAverage::SetMaTradeHistoryForSettlement(position_ticket, settlement_result.deal, position_deal_profit);
 
     }
     return 1;
+}
+
+int MyMovingAverage::SetMaTradeHistoryForTrade(MqlTradeResult &trade_result, CArrayDouble &price_list, double &short_ma_list[]) {
+    int ma_trade_history_cnt = ArraySize(MyMovingAverage::ma_trade_history_list);
+    ArrayResize(MyMovingAverage::ma_trade_history_list, ma_trade_history_cnt + 1);
+    maTradeHistory ma_trade_history = {};
+    ma_trade_history.position_ticket = trade_result.order;
+    ma_trade_history.current_price_and_ma_diff = MathAbs(price_list[0] - short_ma_list[0]);
+    MyMovingAverage::ma_trade_history_list[ma_trade_history_cnt] = ma_trade_history;
+
+    return 1;
+}
+
+int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong deal_ticket, double position_deal_profit) {
+    int ma_trade_history_cnt = ArraySize(MyMovingAverage::ma_trade_history_list);
+    for (int i = 0; i < ma_trade_history_cnt; i++) {
+        if (MyMovingAverage::ma_trade_history_list[i].position_ticket == position_ticket) {
+            MyMovingAverage::ma_trade_history_list[i].deal_ticket = deal_ticket;
+            MyMovingAverage::ma_trade_history_list[i].profit = position_deal_profit;
+            MyMovingAverage::ma_trade_history_list[i].is_benefit = (position_deal_profit < 0.0) ? 0 : 1;
+
+            return 1;
+        }
+    }
+    return 0;
 }

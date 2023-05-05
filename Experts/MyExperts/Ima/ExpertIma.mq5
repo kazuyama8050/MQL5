@@ -7,6 +7,7 @@
 #include <MyInclude\MyTechnical\MyMovingAverage.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
 #include <Arrays\ArrayLong.mqh>
+#include <Arrays\List.mqh>
 #include "include/ExpertIma.mqh"
 #import "Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
@@ -18,6 +19,7 @@
 #import
 #import "Math.ex5"
     double MathMeanForLong(const CArrayLong &array);
+    double MathMeanForDouble(const CArrayDouble &array);
 #import
 #import "Common.ex5"
     void ForceStopEa();
@@ -38,10 +40,27 @@ static double short_ma[];  //短期移動平均を格納する配列
 static double long_ma[];  //長期移動平均を格納する配列
 int ma_cnt = 0;
 
+static maTradeHistory MyMovingAverage::ma_trade_history_list[];
+
 MyAccountInfo myAccountInfo;
 MyLossCutTrade myLossCutTrade;
 MyMovingAverage myMovingAverage;
 ExpertIma expertIma;
+
+struct current_price_and_ma_diff_t {
+    double diff_0;
+    double diff_1;
+    double diff_2;
+    double diff_3;
+    double diff_4;
+    double diff_5;
+    double diff_6;
+    double diff_7;
+    double diff_8;
+    double diff_9;
+    double diff_10;
+};
+
 
 int ExpertIma::PrintTimerReport() {
     PrintFormat("移動平均トレードによる売買回数: %d回、損切り回数：%d", ExpertIma::ma_trade_num, MyMovingAverage::ma_trade_loss_cnt);
@@ -50,6 +69,49 @@ int ExpertIma::PrintTimerReport() {
     PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);
     double total_profit = GetTotalSettlementProfit();
     PrintFormat("現在までの累積損益：%f円", total_profit);
+    
+    //これより下では短期移動平均と売買価格の差の調査
+    CArrayDouble current_price_and_ma_diff_list_by_loss;
+    CArrayDouble current_price_and_ma_diff_list_by_benefit;
+    CArrayDouble current_price_and_ma_diff_list_for_search;
+    for (int i=0;i<101;i++) {
+        current_price_and_ma_diff_list_for_search.Insert(0.0, i);
+    }
+    
+    for (int i = 0;i < ArraySize(MyMovingAverage::ma_trade_history_list); i++) {
+        if (MyMovingAverage::ma_trade_history_list[i].deal_ticket) {
+            maTradeHistory ma_trade_history = MyMovingAverage::ma_trade_history_list[i];
+
+            // PrintFormat("ポジションチケット: %d, 短期移動平均と売買価格の差: %f, 決済チケット: %d, 損益: %f, 判定: %s", 
+                        // ma_trade_history.position_ticket, ma_trade_history.current_price_and_ma_diff, ma_trade_history.deal_ticket,
+                        // ma_trade_history.profit, (ma_trade_history.is_benefit) ? "利益" : "損失");
+            if (ma_trade_history.profit > 100 || ma_trade_history.profit < 100) {
+                if (ma_trade_history.is_benefit) {
+                    current_price_and_ma_diff_list_by_benefit.Insert(ma_trade_history.current_price_and_ma_diff, current_price_and_ma_diff_list_by_benefit.Total());
+                } else {
+                    current_price_and_ma_diff_list_by_loss.Insert(ma_trade_history.current_price_and_ma_diff, current_price_and_ma_diff_list_by_loss.Total());
+                }
+            }
+
+            for (int i=0;i<100;i++) {
+                if (i < ma_trade_history.current_price_and_ma_diff * 100 && i+1 > ma_trade_history.current_price_and_ma_diff * 100) {
+                    current_price_and_ma_diff_list_for_search.Update(i,ma_trade_history.profit + current_price_and_ma_diff_list_for_search.At(i));
+                    // PrintFormat("current_price_and_ma_diff_list_for_search[%d]: %f", i, current_price_and_ma_diff_list_for_search.At(i));
+                }
+            }
+            if (100 < ma_trade_history.current_price_and_ma_diff * 100) {
+                current_price_and_ma_diff_list_for_search.Update(100,ma_trade_history.profit + current_price_and_ma_diff_list_for_search.At(10));
+                // PrintFormat("current_price_and_ma_diff_list_for_search[%d]: %f", 100, current_price_and_ma_diff_list_for_search.At(100));
+            }
+        }
+    }
+
+    for (int i=0;i<101;i++) {
+        PrintFormat("%d帯: %f", i, current_price_and_ma_diff_list_for_search.At(i));
+    }
+
+    PrintFormat("利益確定時の短期移動平均と売買価格の差の平均: %f, 損失確定時の短期移動平均と売買価格の差の平均: %f", MathMeanForDouble(current_price_and_ma_diff_list_by_benefit), MathMeanForDouble(current_price_and_ma_diff_list_by_loss));
+
     return 1;
 }
 
@@ -69,10 +131,11 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
     GetVolumeList(volume_list, Symbol(), COMMON_PERIOD, 10);
     if (volume_list.Total() > 0) {
         double volume_mean = MathMeanForLong(volume_list);
-        volume_deveation = 1 + (volume_list.At(0) / volume_mean);
+        volume_deveation = volume_deveation + (volume_list.At(0) / volume_mean);
     }
     //デフォルトボリュームに直近ボリューム数を考慮した重み付与
-    request.volume = MathRound(DEFAULT_VOLUME * volume_deveation, 2); //小数点2以下で丸める
+    // request.volume = MathRound(DEFAULT_VOLUME * volume_deveation, 2); //小数点2以下で丸める
+    request.volume = DEFAULT_VOLUME;
 
     if (signal > 0) {  // 買い注文
         request.type = ORDER_TYPE_BUY; // 注文タイプ（参考：https://www.mql5.com/ja/docs/constants/tradingconstants/orderproperties）
@@ -98,7 +161,7 @@ int ExpertIma::MaTrade() {
 
     // 仕掛けシグナル判定出ない時はトレンドを読み取って決済判定
     if (ma_signal_ret == 0) {
-        if (myMovingAverage.SettlementTradeByMaTrendSignal(short_ma, 2, MAGIC_NUMBER)) {
+        if (myMovingAverage.SettlementTradeByMaTrendSignal(short_ma, 5, MAGIC_NUMBER)) {
             
         }
     }
@@ -134,11 +197,13 @@ int ExpertIma::MaTrade() {
         if (can_trade) {
             if (!TradeOrder(trade_request, trade_result)) {
                 ExpertIma::trade_error_cnt += 1;
-            }
+            } else {
+                myMovingAverage.SetMaTradeHistoryForTrade(trade_result, price_list, short_ma);
 
-            ExpertIma::ma_trade_num += 1;
-            ExpertIma::ma_trade_last_datetime = TimeLocal();
-            ExpertIma::ma_trade_last_position_ticket = PositionGetTicket(PositionsTotal() - 1);
+                ExpertIma::ma_trade_num += 1;
+                ExpertIma::ma_trade_last_datetime = TimeLocal();
+                ExpertIma::ma_trade_last_position_ticket = PositionGetTicket(PositionsTotal() - 1);
+            }
         }
     }
     return 1;
@@ -170,8 +235,8 @@ void OnInit() {
     Print("Start!!");
     EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
 
-    ExpertIma::short_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, COMMON_PERIOD, 25, 0, MODE_SMA, PRICE_CLOSE);
-    ExpertIma::long_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, COMMON_PERIOD, 75, 0, MODE_SMA, PRICE_CLOSE);
+    ExpertIma::short_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, 0, 25, 0, MODE_SMA, PRICE_CLOSE);
+    ExpertIma::long_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, 0, 75, 0, MODE_SMA, PRICE_CLOSE);
     ArraySetAsSeries(short_ma, true);
     ArraySetAsSeries(long_ma, true);
 }
