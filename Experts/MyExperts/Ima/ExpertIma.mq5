@@ -25,9 +25,9 @@
     void ForceStopEa();
 #import
 
-const double loss_cut_line = 0.05;  //損切りライン
-
+static int ExpertIma::too_short_ima_handle;
 static int ExpertIma::short_ima_handle;
+static int ExpertIma::middle_ima_handle;
 static int ExpertIma::long_ima_handle;
 static int ExpertIma::trade_error_cnt = 0;
 static int ExpertIma::loss_cut_total_num = 0;
@@ -36,7 +36,9 @@ static ulong ExpertIma::ma_trade_last_position_ticket;
 static int ExpertIma::ma_trade_num = 0;
 static int ExpertIma::ma_settlement_num = 0;
 static int MyMovingAverage::ma_trade_loss_cnt = 0;
+static double too_short_ma[];  //超短期移動平均を格納する配列
 static double short_ma[];  //短期移動平均を格納する配列
+static double middle_ma[];  //中期移動平均を格納する配列
 static double long_ma[];  //長期移動平均を格納する配列
 int ma_cnt = 0;
 
@@ -47,21 +49,6 @@ MyLossCutTrade myLossCutTrade;
 MyMovingAverage myMovingAverage;
 ExpertIma expertIma;
 
-struct current_price_and_ma_diff_t {
-    double diff_0;
-    double diff_1;
-    double diff_2;
-    double diff_3;
-    double diff_4;
-    double diff_5;
-    double diff_6;
-    double diff_7;
-    double diff_8;
-    double diff_9;
-    double diff_10;
-};
-
-
 int ExpertIma::PrintTimerReport() {
     PrintFormat("移動平均トレードによる売買回数: %d回、損切り回数：%d", ExpertIma::ma_trade_num, MyMovingAverage::ma_trade_loss_cnt);
     PrintFormat("移動平均トレードによる騙し判定：、%d回、%f％", ExpertIma::ma_settlement_num, (ExpertIma::ma_settlement_num / ExpertIma::ma_trade_num * 100));
@@ -69,7 +56,13 @@ int ExpertIma::PrintTimerReport() {
     PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_error_cnt);
     double total_profit = GetTotalSettlementProfit();
     PrintFormat("現在までの累積損益：%f円", total_profit);
+
+    ExpertIma::PrintCurrentPriceAndMaDiffResult();
     
+    return 1;
+}
+
+int ExpertIma::PrintCurrentPriceAndMaDiffResult() {
     //これより下では短期移動平均と売買価格の差の調査
     CArrayDouble current_price_and_ma_diff_list_by_loss;
     CArrayDouble current_price_and_ma_diff_list_by_benefit;
@@ -135,7 +128,7 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
     }
     //デフォルトボリュームに直近ボリューム数を考慮した重み付与
     // request.volume = MathRound(DEFAULT_VOLUME * volume_deveation, 2); //小数点2以下で丸める
-    request.volume = DEFAULT_VOLUME;
+    request.volume = DEFAULT_VOLUME * MathAbs(signal);
 
     if (signal > 0) {  // 買い注文
         request.type = ORDER_TYPE_BUY; // 注文タイプ（参考：https://www.mql5.com/ja/docs/constants/tradingconstants/orderproperties）
@@ -149,7 +142,9 @@ bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
 
 int ExpertIma::MaTrade() {
     bool can_trade = true;
+    CopyBuffer(too_short_ima_handle, 0, 0, 10, too_short_ma);
     CopyBuffer(short_ima_handle, 0, 0, 10, short_ma);
+    CopyBuffer(middle_ima_handle, 0, 0, 10, middle_ma);
     CopyBuffer(long_ima_handle, 0, 0, 10, long_ma);
 
     // 直近の価格リストを取得（チャート時間軸 × 10）
@@ -157,7 +152,7 @@ int ExpertIma::MaTrade() {
     GetPriceList(price_list, Symbol(), COMMON_PERIOD, 10);
 
     // 仕掛けシグナル
-    double ma_signal_ret = myMovingAverage.EntrySignalNormal(short_ma, long_ma, price_list);
+    double ma_signal_ret = myMovingAverage.EntrySignalNormal(too_short_ma, short_ma, middle_ma, long_ma, price_list);
 
     // 仕掛けシグナル判定出ない時はトレンドを読み取って決済判定
     if (ma_signal_ret == 0) {
@@ -225,7 +220,7 @@ bool ExpertIma::MainLoop() {
     }
 
     //損切りライン確認 & 決済実行
-    ExpertIma::loss_cut_total_num += myLossCutTrade.ClosePositionByLossCutRule(loss_cut_line);
+    ExpertIma::loss_cut_total_num += myLossCutTrade.ClosePositionByLossCutRule(DEFAULT_FORCE_LOSS_CUT_LINE);
 
     Sleep(10000); // 10秒スリープ
     return true;
@@ -235,9 +230,13 @@ void OnInit() {
     Print("Start!!");
     EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
 
+    ExpertIma::too_short_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, 0, 5, 0, MODE_SMA, PRICE_CLOSE);
     ExpertIma::short_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, 0, 25, 0, MODE_SMA, PRICE_CLOSE);
-    ExpertIma::long_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, 0, 75, 0, MODE_SMA, PRICE_CLOSE);
+    ExpertIma::middle_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, 0, 75, 0, MODE_SMA, PRICE_CLOSE);
+    ExpertIma::long_ima_handle = myMovingAverage.CreateMaIndicator(_Symbol, 0, 200, 0, MODE_SMA, PRICE_CLOSE);
+    ArraySetAsSeries(too_short_ma, true);
     ArraySetAsSeries(short_ma, true);
+    ArraySetAsSeries(middle_ma, true);
     ArraySetAsSeries(long_ma, true);
 }
 

@@ -1,5 +1,6 @@
 #define DEFAULT_VOLUME 0.01  //デフォルト注文ボリューム
 #define DEFAULT_TRADE_ACTION_DEAL 5  //デフォルト注文時価格の最大偏差
+#define DEFAULT_FORCE_LOSS_CUT_LINE 0.01
 #define MAGIC_NUMBER 123456
 #define COMMON_PERIOD PERIOD_M15 //期間（15分足）
 
@@ -17,7 +18,9 @@ class ExpertIma {
         int ExpertIma::CheckAfterMaTrade(ulong position_ticket);
         int ExpertIma::PrintTimerReport();
     public:
+        static int ExpertIma::too_short_ima_handle; // 超短期移動平均線
         static int ExpertIma::short_ima_handle; // 短期移動平均線
+        static int ExpertIma::middle_ima_handle; //中期移動平均線
         static int ExpertIma::long_ima_handle; //長期移動平均線
         static int ExpertIma::trade_error_cnt; //注文エラー回数
         static int ExpertIma::loss_cut_total_num; //トータル強制決済回数
@@ -32,5 +35,6 @@ class ExpertIma {
         // static string short_name;
 
     private:
+        static int ExpertIma::PrintCurrentPriceAndMaDiffResult();
         
 };

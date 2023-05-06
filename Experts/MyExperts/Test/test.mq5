@@ -93,4 +93,34 @@ void OnInit() {
     
     FileClose(fileHandle);
 
+    CArrayDouble price_list;
+    GetPriceList(price_list, Symbol(), PERIOD_M15, 100000);
+    CArrayLong volume_list;
+    GetVolumeList(volume_list, Symbol(), PERIOD_M15, 100000);
+
+    double volume_mean;
+
+    for (int i=0;i<volume_list.Total();i++) {
+        volume_mean += volume_list.At(i);
+    }
+
+    PrintFormat("volume_mean=%f", volume_mean / volume_list.Total());
+
+}
+
+void OnTick() {
+    Print("Tick Start");
+
+    CArrayDouble price_list;
+    GetPriceList(price_list, Symbol(), PERIOD_M15, 10);
+    CArrayLong volume_list;
+    GetVolumeList(volume_list, Symbol(), PERIOD_M15, 10000);
+
+    double volume_mean;
+
+    for (int i=0;i<volume_list.Total();i++) {
+        volume_mean += volume_list.At(i);
+    }
+
+    PrintFormat("volume_mean=%f", volume_mean / volume_list.Total());
 }

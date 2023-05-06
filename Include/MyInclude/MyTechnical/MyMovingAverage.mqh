@@ -47,7 +47,7 @@ class MyMovingAverage {
                             ENUM_MA_METHOD ma_method, 
                             ENUM_APPLIED_PRICE applied_price
         );
-        double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_ma_list[], CArrayDouble &price_list);
+        double MyMovingAverage::EntrySignalNormal(double &too_short_ma_list[], double &short_ma_list[], double &middle_ma_list[], double &long_ma_list[], CArrayDouble &price_list);
         int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
         int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number);
         int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_term, long magic_number);
@@ -106,33 +106,62 @@ int MyMovingAverage::CreateMaIndicator(
 
 /** 移動平均のエントリシグナル検知
  * 引数1: 短期移動平均リスト（要素数3以上）
- * 引数2: 長期移動平均リスト（要素数3以上）
- * 引数3: 直近からの価格リスト
+ * 引数2: 中期移動平均リスト（要素数3以上）
+ * 引数3: 長期移動平均リスト（要素数3以上）
+ * 引数4: 直近からの価格リスト
  * return double シグナル検知
  * ToDo 将来的に重み付けしたい
 **/ 
-double MyMovingAverage::EntrySignalNormal(double &short_ma_list[], double &long_ma_list[], CArrayDouble &price_list) {
+double MyMovingAverage::EntrySignalNormal(double &too_short_ma_list[], double &short_ma_list[], double &middle_ma_list[], double &long_ma_list[], CArrayDouble &price_list) {
     double ret = 0.0;
 
     int price_list_num = price_list.Total();
     double price_mean = MathMeanForDouble(price_list);
     double current_price = price_list.At(0);
     double price_list_diff_mean = MathDiffMeanForDouble(price_list);
+
+    double too_short_ma_current_diff = too_short_ma_list[0] - too_short_ma_list[2];
     
+    /**
+     * 短期移動平均と中期移動平均
+    **/
+    //買いシグナル ゴールデンクロス
+    if (middle_ma_list[2] >= short_ma_list[2] && middle_ma_list[0] < short_ma_list[0]) {
+        // 上昇トレンド中 （直近価格が平均より高い & 超短期移動平均が上向きとしておく）
+        if (price_mean < current_price && too_short_ma_current_diff > 0) {
+            ret = 1.0;
+            PrintFormat("買いシグナル発火（短期・中期）、middle_ma2=%f >= short_ma2=%f、middle_ma0=%f < short_ma0=%f", middle_ma_list[2], short_ma_list[2], middle_ma_list[0], short_ma_list[0]);
+        }
+    }
+    //売りシグナル デッドクロス
+    if (middle_ma_list[2] <= short_ma_list[2] && middle_ma_list[0] >= short_ma_list[0]) {
+        // 下降トレンド中 （直近価格が平均より低いとしておく & 超短期移動平均が下向きとしておく）
+        if (price_mean > current_price && too_short_ma_current_diff < 0) {
+            ret = -1.0;
+            PrintFormat("売りシグナル発火（短期・中期）、middle_ma2=%f >= short_ma2=%f、middle_ma0=%f > short_ma0=%f", middle_ma_list[2], short_ma_list[2], middle_ma_list[0], short_ma_list[0]);
+        }
+    }
+    
+    /**
+     * 短期移動平均と長期移動平均
+    **/
+
+    double middle_ma_diff = middle_ma_list[0] - middle_ma_list[5];
+
     //買いシグナル ゴールデンクロス
     if (long_ma_list[2] >= short_ma_list[2] && long_ma_list[0] < short_ma_list[0]) {
-        // 上昇トレンド中 （直近価格が平均より高いとしておく）
-        if (price_mean < current_price) {
-            ret = 1.0;
-            PrintFormat("買いシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f < short_ma0=%f", long_ma_list[2], short_ma_list[2], long_ma_list[0], short_ma_list[0]);
+        // 中期移動平均と超短期移動平均が上昇トレンド中
+        if (middle_ma_diff > 0 && too_short_ma_current_diff > 0) {
+            ret = 2.0;
+            PrintFormat("買いシグナル発火（短期・長期）、long_ma2=%f >= short_ma2=%f、long_ma0=%f < short_ma0=%f", long_ma_list[2], short_ma_list[2], long_ma_list[0], short_ma_list[0]);
         }
     }
     //売りシグナル デッドクロス
     if (long_ma_list[2] <= short_ma_list[2] && long_ma_list[0] >= short_ma_list[0]) {
-        // 下降トレンド中 （直近価格が平均より低いとしておく）
-        if (price_mean > current_price) {
-            ret = -1.0;
-            PrintFormat("売りシグナル発火、long_ma2=%f >= short_ma2=%f、long_ma0=%f > short_ma0=%f", long_ma_list[2], short_ma_list[2], long_ma_list[0], short_ma_list[0]);
+        // 中期移動平均と超短期移動平均が下降トレンド中
+        if (middle_ma_diff < 0 && too_short_ma_current_diff < 0) {
+            ret = -2.0;
+            PrintFormat("売りシグナル発火（短期・長期）、long_ma2=%f >= short_ma2=%f、long_ma0=%f > short_ma0=%f", long_ma_list[2], short_ma_list[2], long_ma_list[0], short_ma_list[0]);
         }
     }
 
