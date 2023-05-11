@@ -49,9 +49,10 @@ class MyMovingAverage {
         );
         double MyMovingAverage::EntrySignalNormal(double &too_short_ma_list[], double &short_ma_list[], double &middle_ma_list[], double &long_ma_list[], CArrayDouble &price_list);
         int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
-        int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number);
+        int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number, string settlement_comment);
         int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_term, long magic_number);
         int MyMovingAverage::SetMaTradeHistoryForTrade(MqlTradeResult &trade_result, CArrayDouble &price_list, double &short_ma_list[]);
+        double MyMovingAverage::CheckKeepTrendByMa(double &ma_list[], int start_el, int end_el);
 
     private:
         int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong deal_ticket, double position_deal_profit);
@@ -254,7 +255,7 @@ int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int
  * 引数2: magic_number 移動平均以外のトレードの決済はしない
  * return int
 **/
-int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number) {
+int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number, string settlement_comment) {
     int total_position = PositionsTotal();  //保有ポジション数
 
     for (int i = 0; i < total_position; i++) {
@@ -273,7 +274,7 @@ int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_positio
             continue;
         }
 
-        //シグナルは判定とポジションタイプが同じ
+        //シグナル判定とポジションタイプが同じ
         if (signal_position_type == position_type) {
             continue;
         } 
@@ -281,7 +282,7 @@ int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_positio
         MqlTradeRequest settlement_request={};
         MqlTradeResult settlement_result={};
 
-        string comment = StringFormat("移動平均シグナル検知による決済、チケット=%d", position_ticket);
+        string comment = StringFormat("%s、チケット=%d", settlement_comment, position_ticket);
 
         if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
             continue;
@@ -320,4 +321,40 @@ int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong
         }
     }
     return 0;
+}
+
+/** 指定期間の移動平均のトレンド有無チェック
+ * 引数1 : 移動平均リスト（新しいデータから順に格納されたリスト）
+ * 引数2 : スタート要素番号
+ * 引数3 : エンド要素番号
+ * return double （上昇トレンド継続中:1、下降トレンド継続中:-1、トレンドなし:0）
+**/
+double MyMovingAverage::CheckKeepTrendByMa(double &ma_list[], int start_el, int end_el) {
+    int ma_list_cnt = ArraySize(ma_list);
+    if (ma_list_cnt < start_el + 1) {
+        return 0;
+    }
+
+    int trend = 0;
+
+    for (int i = start_el;i > end_el;i--) {
+        // 上昇トレンド中
+        if (!trend && ma_list[i] > ma_list[i - 1]) {
+            trend = 1.0;
+        }
+        // 下降トレンド中
+        else if (!trend && ma_list[i] < ma_list[i - 1]) {
+            trend = -1.0;
+        }
+        
+        // 上昇トレンド中
+        if (trend > 0 && ma_list[i] <= ma_list[i - 1]) {
+            return 0;
+        }
+        // 下降トレンド中
+        else if (trend < 0 && ma_list[i] >= ma_list[i - 1]) {
+            return 0;
+        }
+    }
+    return trend;
 }
