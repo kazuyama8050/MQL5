@@ -54,7 +54,7 @@ class MyMovingAverage {
         double MyMovingAverage::EntrySignalNormal(const double &too_short_ma_list[], const double &short_ma_list[], const double &middle_ma_list[], const double &long_ma_list[], const CArrayDouble &price_list);
         int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
         int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number, string settlement_comment);
-        int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_term, long magic_number);
+        int MyMovingAverage::SettlementTradeByMaTrendSignal(const double &short_ma_list[], int compare_term, long magic_number);
         int MyMovingAverage::SetMaTradeHistoryForTrade(MqlTradeResult &trade_result, CArrayDouble &price_list, double &short_ma_list[]);
         double MyMovingAverage::CheckKeepTrendByMa(double &ma_list[], int start_el, int end_el);
         bool MyMovingAverage::IsBoxTrend(const double &ma_list[], int term, double deviation_val);
@@ -221,11 +221,11 @@ int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
 }
 
 /** 移動平均トレンドシグナル検知によるポジション決済
- * 引数1: 短期移動平均リストのポインタ
+ * 引数1: 短期移動平均リスト
  * 引数2: 比較対象の移動平均対象期間（tick数指定）
  * 引数3: magic_number 移動平均以外のトレードの決済はしない
 **/
-int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_term, long magic_number) {
+int MyMovingAverage::SettlementTradeByMaTrendSignal(const double &short_ma_list[], int compare_term, long magic_number) {
     int total_position = PositionsTotal();
 
     for (int i = 0; i < total_position; i++) {
