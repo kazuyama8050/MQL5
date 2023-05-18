@@ -12,6 +12,8 @@
 #import "Math.ex5"
     double MathMeanForDouble(const CArrayDouble &array);
     double MathDiffMeanForDouble(const CArrayDouble &array);
+    int MathStandardizationDouble(double &ret_array[], const double &array[]);
+    double MathStandardDeviation(const double &array[]);
 #import
 #import "File.ex5"
     string GetValueOfFileKey(int file_handle, string key);
@@ -21,6 +23,8 @@
 #import
 
 #define MA_DECEPTION_ALLOWED_PERCENTAGE 0.03  //移動平均トレードの騙し判定許容パーセンテージ
+#define SHORT_MA_STANDARD_DEVIATION_VALUE 0.03
+#define MIDDLE_MA_STANDARD_DEVIATION_VALUE 0.004
 
 struct maTradeHistory
 {
@@ -47,12 +51,13 @@ class MyMovingAverage {
                             ENUM_MA_METHOD ma_method, 
                             ENUM_APPLIED_PRICE applied_price
         );
-        double MyMovingAverage::EntrySignalNormal(double &too_short_ma_list[], double &short_ma_list[], double &middle_ma_list[], double &long_ma_list[], CArrayDouble &price_list);
+        double MyMovingAverage::EntrySignalNormal(const double &too_short_ma_list[], const double &short_ma_list[], const double &middle_ma_list[], const double &long_ma_list[], const CArrayDouble &price_list);
         int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
         int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number, string settlement_comment);
         int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int compare_term, long magic_number);
         int MyMovingAverage::SetMaTradeHistoryForTrade(MqlTradeResult &trade_result, CArrayDouble &price_list, double &short_ma_list[]);
         double MyMovingAverage::CheckKeepTrendByMa(double &ma_list[], int start_el, int end_el);
+        bool MyMovingAverage::IsBoxTrend(const double &ma_list[], int term, double deviation_val);
 
     private:
         int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong deal_ticket, double position_deal_profit);
@@ -106,14 +111,15 @@ int MyMovingAverage::CreateMaIndicator(
 }
 
 /** 移動平均のエントリシグナル検知
- * 引数1: 短期移動平均リスト（要素数3以上）
- * 引数2: 中期移動平均リスト（要素数3以上）
- * 引数3: 長期移動平均リスト（要素数3以上）
- * 引数4: 直近からの価格リスト
+ * 引数1: 超短期移動平均リスト（要素数3以上）
+ * 引数2: 短期移動平均リスト（要素数3以上）
+ * 引数3: 中期移動平均リスト（要素数3以上）
+ * 引数4: 長期移動平均リスト（要素数3以上）
+ * 引数5: 直近からの価格リスト
  * return double シグナル検知
  * ToDo 将来的に重み付けしたい
 **/ 
-double MyMovingAverage::EntrySignalNormal(double &too_short_ma_list[], double &short_ma_list[], double &middle_ma_list[], double &long_ma_list[], CArrayDouble &price_list) {
+double MyMovingAverage::EntrySignalNormal(const double &too_short_ma_list[], const double &short_ma_list[], const double &middle_ma_list[], const double &long_ma_list[], const CArrayDouble &price_list) {
     double ret = 0.0;
 
     int price_list_num = price_list.Total();
@@ -169,6 +175,26 @@ double MyMovingAverage::EntrySignalNormal(double &too_short_ma_list[], double &s
     return ret;
 }
 
+/** 対象移動平均のボックス相場判定
+ * 引数1 : 移動平均リスト（term以上の要素数）（要素0が直近の時系列）
+ * 引数2 : 対象足数
+ * 引数3 : 標準偏差基準値
+ * return bool
+**/
+bool MyMovingAverage::IsBoxTrend(const double &ma_list[], int term, double deviation_val) {
+    double ma_target_list[];
+    ArrayInsert(ma_target_list, ma_list, 0, 0, term);
+
+    double ma_standard_deviation = MathStandardDeviation(ma_target_list);
+
+    if (ma_standard_deviation < deviation_val) {
+        PrintFormat("ma standard_deviation=%f", MathStandardDeviation(ma_target_list));
+        return true;
+    } 
+
+    return false;
+}
+
 /** 移動平均トレードの騙し判定監視
  * 引数1: ポジションチケット
  * return int
@@ -180,7 +206,7 @@ int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
     MqlTradeRequest settlement_request={};
     MqlTradeResult settlement_result={};
 
-    string comment = StringFormat("移動平均トレードの騙し判定による決済、チケット=%d", position_ticket);
+    string comment = StringFormat("[決済]移動平均トレードの騙し判定、チケット=%d", position_ticket);
 
     if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
         return 0;
@@ -235,7 +261,7 @@ int MyMovingAverage::SettlementTradeByMaTrendSignal(double &short_ma_list[], int
         MqlTradeRequest settlement_request={};
         MqlTradeResult settlement_result={};
 
-        string comment = StringFormat("移動平均トレンドシグナル検知による決済、チケット=%d", position_ticket);
+        string comment = StringFormat("[決済]移動平均トレンドシグナル、チケット=%d", position_ticket);
 
         if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
             continue;
@@ -339,20 +365,20 @@ double MyMovingAverage::CheckKeepTrendByMa(double &ma_list[], int start_el, int 
 
     for (int i = start_el;i > end_el;i--) {
         // 上昇トレンド中
-        if (!trend && ma_list[i] > ma_list[i - 1]) {
+        if (!trend && ma_list[i] < ma_list[i - 1]) {
             trend = 1.0;
         }
         // 下降トレンド中
-        else if (!trend && ma_list[i] < ma_list[i - 1]) {
+        else if (!trend && ma_list[i] > ma_list[i - 1]) {
             trend = -1.0;
         }
         
         // 上昇トレンド中
-        if (trend > 0 && ma_list[i] <= ma_list[i - 1]) {
+        if (trend > 0 && ma_list[i] >= ma_list[i - 1]) {
             return 0;
         }
         // 下降トレンド中
-        else if (trend < 0 && ma_list[i] >= ma_list[i - 1]) {
+        else if (trend < 0 && ma_list[i] <= ma_list[i - 1]) {
             return 0;
         }
     }
