@@ -256,15 +256,15 @@ int MyMovingAverage::SettlementTradeByMaTrendSignal(const double &short_ma_list[
         }
 
         int is_settlement = 1;
-        for (int i = compare_term;i > 0;i--) {
+        for (int y = compare_term;y > 0;y--) {
             // 買いポジションの場合、期間中に一回でも上昇トレンドのままなら何もしない
             if (position_type == POSITION_TYPE_BUY) {
-                if (short_ma_list[i - 1] > short_ma_list[i]) {
+                if (short_ma_list[y - 1] > short_ma_list[y]) {
                     is_settlement = 0;
                 }
             // 売りポジションの場合、期間中に一回でも下落トレンドのままなら何もしない
             } else if (position_type == POSITION_TYPE_SELL) {
-                if (short_ma_list[i - 1] < short_ma_list[i]) {
+                if (short_ma_list[y - 1] < short_ma_list[y]) {
                     is_settlement = 0;
                 }
             }

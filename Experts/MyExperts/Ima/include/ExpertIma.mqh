@@ -12,7 +12,28 @@
 #include <Arrays\ArrayInt.mqh>
 #include <Arrays\ArrayDouble.mqh>
 
+// 最新の移動平均取引情報構造体
+struct MaLastTradeStruct
+{
+    datetime last_datetime;  //移動平均を用いたラストトレード日時
+    ulong last_position_ticket;  //移動平均を用いた最新取引のポジションチケット番号
+};
 
+//移動平均取引集計情報構造体
+struct MaTradeAggregatorStruct
+{
+    int trade_num;  //移動平均トレードによる注文回数
+    int settlement_num_by_deception;  //移動平均トレードの騙し判定決済回数
+    int settlement_num_by_trend_checker;  //移動平均トレードのトレンド変化による決済回数
+    int settlement_num_by_ma_signal;  // 移動平均トレードのシグナル検知による決済回数
+};
+
+// 全取引集計情報構造体
+struct TradeAggregatorStruct
+{
+    int loss_cut_total_num; //トータル強制決済回数
+    int trade_error_cnt; //注文エラー回数
+};
 
 class ExpertIma {
     public:
@@ -26,14 +47,9 @@ class ExpertIma {
         static int ExpertIma::short_ima_handle; // 短期移動平均線
         static int ExpertIma::middle_ima_handle; //中期移動平均線
         static int ExpertIma::long_ima_handle; //長期移動平均線
-        static int ExpertIma::trade_error_cnt; //注文エラー回数
-        static int ExpertIma::loss_cut_total_num; //トータル強制決済回数
-        static datetime ExpertIma::ma_trade_last_datetime; //移動平均を用いたラストトレード日時
-        static ulong ExpertIma::ma_trade_last_position_ticket; //移動平均を用いた最新取引のポジションチケット番号
-        static int ExpertIma::ma_trade_num;  //移動平均トレードによる注文回数
-        static int ExpertIma::ma_settlement_num;  //移動平均トレードによる騙し判定回数
-    protected:
-       
+        static MaLastTradeStruct ExpertIma::ma_last_trade_struct;  // 移動平均による最新取引情報構造体
+        static MaTradeAggregatorStruct ExpertIma::ma_trade_aggregator_struct;  //移動平均による取引集計情報構造体
+        static TradeAggregatorStruct ExpertIma::trade_aggregator_struct;  // 取引集計情報構造体
     private:
         // static int m_ima_handle;
         // static string short_name;
