@@ -26,6 +26,18 @@ double MathMeanForLong(const CArrayLong &array) export {
     return mean;
 }
 
+double MathMeanForLong(const long &array[]) export {
+    int size = ArraySize(array);
+    if(size < 1) {return(0.0);}
+
+    double mean = 0;
+    for(int i = 0; i < size; i++) {
+        mean += (double)array[i];
+    }
+    mean = (double)mean / size;
+    return mean;
+}
+
 double MathMeanForDouble(const CArrayDouble &array) export {
     int size = array.Total();
     if(size < 1) {return(0.0);}
@@ -33,6 +45,18 @@ double MathMeanForDouble(const CArrayDouble &array) export {
     double mean = 0;
     for(int i = 0; i < size; i++) {
         mean += array.At(i);
+    }
+    mean = (double)mean / size;
+    return mean;
+}
+
+double MathMeanForDouble(const double &array[]) export {
+    int size = ArraySize(array);
+    if(size < 1) {return(0.0);}
+
+    double mean = 0;
+    for(int i = 0; i < size; i++) {
+        mean += array[i];
     }
     mean = (double)mean / size;
     return mean;
@@ -52,4 +76,58 @@ double MathDiffMeanForDouble(const CArrayDouble &array) export {
     }
     diff_mean = diff_mean / size;
     return diff_mean;
+}
+
+//正規化
+double MathNormalizeDouble(const double target, const double &array[]) export {
+    int array_cnt = ArraySize(array) - 1;
+    // 最大値、最小値の要素番号
+    int index_max = ArrayMaximum(array);
+    int index_min = ArrayMinimum(array);
+
+    //最大値、最小値
+    double max_val = array[array_cnt - index_max];
+    double min_val = array[array_cnt - index_min];
+
+    return (target - min_val) / (max_val - min_val);
+}
+
+//標準偏差
+double MathStandardDeviation(const double &array[]) export {
+    double array_mean = MathMeanForDouble(array);
+    int array_size = ArraySize(array);
+
+    double val = 0;
+    for (int i = 0;i < array_size;i++) {
+        val += (array[i] - array_mean) * (array[i] - array_mean);
+    }
+
+    if (val <= 0) {
+        return 0.0;
+    }
+
+    return MathSqrt(val / array_size);
+}
+
+//標準化
+double MathStandardizationDouble(const double target, const double &array[]) export {
+    double array_mean = MathMeanForDouble(array);
+    double standard_deviation = MathStandardDeviation(array);  //標準偏差
+    if (standard_deviation <= 0) {
+        return 0.0;
+    }
+
+    return (target - array_mean) / standard_deviation;
+}
+
+//標準化リスト
+int MathStandardizationDouble(double &ret_array[], const double &array[]) export {
+    int array_size = ArraySize(array);
+    ArrayResize(ret_array, array_size);
+
+    for (int i = 0;i < array_size;i++) {
+        double standard_deviation = MathStandardizationDouble(array[i], array);
+        ret_array[i] = standard_deviation;
+    }
+    return 1;
 }

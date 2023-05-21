@@ -22,10 +22,6 @@
     void ForceStopEa();
 #import
 
-#define MA_DECEPTION_ALLOWED_PERCENTAGE 0.03  //移動平均トレードの騙し判定許容パーセンテージ
-#define SHORT_MA_STANDARD_DEVIATION_VALUE 0.03
-#define MIDDLE_MA_STANDARD_DEVIATION_VALUE 0.004
-
 struct maTradeHistory
 {
     ulong position_ticket;
@@ -52,12 +48,13 @@ class MyMovingAverage {
                             ENUM_APPLIED_PRICE applied_price
         );
         double MyMovingAverage::EntrySignalNormal(const double &too_short_ma_list[], const double &short_ma_list[], const double &middle_ma_list[], const double &long_ma_list[], const CArrayDouble &price_list);
-        int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket);
+        int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket, double allowed_percent);
         int MyMovingAverage::SettlementTradeByMaSignal(ENUM_POSITION_TYPE signal_position_type, long magic_number, string settlement_comment);
         int MyMovingAverage::SettlementTradeByMaTrendSignal(const double &short_ma_list[], int compare_term, long magic_number);
         int MyMovingAverage::SetMaTradeHistoryForTrade(MqlTradeResult &trade_result, CArrayDouble &price_list, double &short_ma_list[]);
         double MyMovingAverage::CheckKeepTrendByMa(double &ma_list[], int start_el, int end_el);
         bool MyMovingAverage::IsBoxTrend(const double &ma_list[], int term, double deviation_val);
+        bool MyMovingAverage::IsRapidChange(const double &ma_list[], int term, double deviation_val);
 
     private:
         int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong deal_ticket, double position_deal_profit);
@@ -121,7 +118,6 @@ int MyMovingAverage::CreateMaIndicator(
 **/ 
 double MyMovingAverage::EntrySignalNormal(const double &too_short_ma_list[], const double &short_ma_list[], const double &middle_ma_list[], const double &long_ma_list[], const CArrayDouble &price_list) {
     double ret = 0.0;
-
     int price_list_num = price_list.Total();
     double price_mean = MathMeanForDouble(price_list);
     double current_price = price_list.At(0);
@@ -186,9 +182,28 @@ bool MyMovingAverage::IsBoxTrend(const double &ma_list[], int term, double devia
     ArrayInsert(ma_target_list, ma_list, 0, 0, term);
 
     double ma_standard_deviation = MathStandardDeviation(ma_target_list);
-
     if (ma_standard_deviation < deviation_val) {
-        PrintFormat("ma standard_deviation=%f", MathStandardDeviation(ma_target_list));
+        // PrintFormat("[ボックス相場]：標準偏差=%f", ma_standard_deviation);
+        return true;
+    } 
+
+    return false;
+}
+
+/** 対象移動平均の急激な相場変動判定
+ * 引数1 : 移動平均リスト（term以上の要素数）（要素0が直近の時系列）
+ * 引数2 : 対象足数
+ * 引数3 : 標準偏差基準値
+ * return bool
+**/
+bool MyMovingAverage::IsRapidChange(const double &ma_list[], int term, double deviation_val) {
+    double ma_target_list[];
+    ArrayInsert(ma_target_list, ma_list, 0, 0, term);
+
+    double ma_standard_deviation = MathStandardDeviation(ma_target_list);
+    // PrintFormat("[急激な相場変動]：標準偏差=%f", ma_standard_deviation);
+    if (ma_standard_deviation > deviation_val) {
+        // PrintFormat("[急激な相場変動]：標準偏差=%f", ma_standard_deviation);
         return true;
     } 
 
@@ -197,10 +212,11 @@ bool MyMovingAverage::IsBoxTrend(const double &ma_list[], int term, double devia
 
 /** 移動平均トレードの騙し判定監視
  * 引数1: ポジションチケット
+ * 引数2: ダマシ許容パーセンテージ
  * return int
 **/
-int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket) {
-    if (!IsDeceptionTrade(position_ticket, MA_DECEPTION_ALLOWED_PERCENTAGE)) {
+int MyMovingAverage::CheckAfterMaTrade(ulong position_ticket, double allowed_percent) {
+    if (!IsDeceptionTrade(position_ticket, allowed_percent)) {
         return 0;
     }
     MqlTradeRequest settlement_request={};
