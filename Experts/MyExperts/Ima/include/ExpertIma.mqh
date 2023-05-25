@@ -3,14 +3,11 @@
 #define MAGIC_NUMBER 123456
 #define COMMON_PERIOD PERIOD_M15 //期間（15分足）
 
-#define TOO_SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_RAPID_CHANGE 0.25
-#define SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_BOX_TREND 0.03
-#define MIDDLE_MA_STANDARD_DEVIATION_VALUE_FOR_BOX_TREND 0.04
-#define SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_RAPID_CHANGE 0.04
-
 #include <Arrays\ArrayLong.mqh>
 #include <Arrays\ArrayInt.mqh>
 #include <Arrays\ArrayDouble.mqh>
+
+#include <MyInclude\MyFundamental\MyCalendarEvent.mqh>
 
 // 最新の移動平均取引情報構造体
 struct MaLastTradeStruct
@@ -42,6 +39,7 @@ class ExpertIma {
         bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal);
         int ExpertIma::CheckAfterMaTrade(ulong position_ticket);
         int ExpertIma::PrintTimerReport();
+        int ExpertIma::GetMyCalendarEvent(MyCalendarEvent &my_calendar_event_list[]);
     public:
         static int ExpertIma::too_short_ima_handle; // 超短期移動平均線
         static int ExpertIma::short_ima_handle; // 短期移動平均線
@@ -50,6 +48,7 @@ class ExpertIma {
         static MaLastTradeStruct ExpertIma::ma_last_trade_struct;  // 移動平均による最新取引情報構造体
         static MaTradeAggregatorStruct ExpertIma::ma_trade_aggregator_struct;  //移動平均による取引集計情報構造体
         static TradeAggregatorStruct ExpertIma::trade_aggregator_struct;  // 取引集計情報構造体
+        MyCalendarEvent ExpertIma::my_calendar_event_list[];  // イベントカレンダークラスリスト
     private:
         // static int m_ima_handle;
         // static string short_name;

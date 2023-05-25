@@ -1,11 +1,13 @@
 #include <Object.mqh>
 #include <Trade\Trade.mqh>
 #include <Indicators\Indicators.mqh>
+#include <Tools\DateTime.mqh>
 #include <Math\Stat\Math.mqh>
 #include <MyInclude\MyAccount\MyAccountInfo.mqh>
 #include <MyInclude\MyTrade\MyLossCutTrade.mqh>
 #include <MyInclude\MyTechnical\MyMovingAverage.mqh>
 #include <MyInclude\MyTechnical\MyReversalSign.mqh>
+#include <MyInclude\MyFundamental\MyCalendarEvent.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
 #include <Arrays\ArrayLong.mqh>
 #include <Arrays\List.mqh>
@@ -25,6 +27,10 @@
 #import "Common.ex5"
     void ForceStopEa();
 #import
+#import "CalendarEvent.ex5"
+    int GetCalendarValueByCountries(MqlCalendarValue &mql_calendar_value_list[], const string &target_country_list[], datetime fromDatetime, datetime toDatetime);
+    int GetCalendarEventByEventId(MqlCalendarEvent &mql_calendar_event, ulong event_id);
+#import
 
 input group "ロジック実行許可有無"
 input bool is_use_box_trend_checker_input = true;
@@ -34,13 +40,29 @@ input group "ロジック閾値"
 input double force_loss_cut_line_input = 0.05;
 input double ma_deception_loss_cut_line_input = 0.03;
 
+#define DEFAULT_FORCE_LOSS_CUT_LINE force_loss_cut_line_input
+#define MA_DECEPTION_ALLOWED_PERCENTAGE ma_deception_loss_cut_line_input  //移動平均トレードの騙し判定許容パーセンテージ
+
+
 input group "各種デフォルト値"
 sinput double default_order_price_input = 0.01;
 
-
 #define DEFAULT_VOLUME default_order_price_input  //デフォルト注文ボリューム
-#define DEFAULT_FORCE_LOSS_CUT_LINE force_loss_cut_line_input
-#define MA_DECEPTION_ALLOWED_PERCENTAGE ma_deception_loss_cut_line_input  //移動平均トレードの騙し判定許容パーセンテージ
+
+
+input group "移動平均トレンド判定"
+input double too_short_ma_standard_deviation_value_for_rapid_change = 0.2;
+input double short_ma_standard_deviation_value_for_box_trend = 0.04;
+input double middle_ma_standard_deviation_value_for_box_trend = 0.05;
+input double short_ma_standard_deviation_value_for_rapid_change = 0.045;
+
+input group "経済指標イベント"
+input ENUM_CALENDAR_EVENT_IMPORTANCE default_non_trade_calendar_event_importance_level = CALENDAR_IMPORTANCE_HIGH;
+
+#define TOO_SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_RAPID_CHANGE too_short_ma_standard_deviation_value_for_rapid_change
+#define SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_BOX_TREND short_ma_standard_deviation_value_for_box_trend
+#define MIDDLE_MA_STANDARD_DEVIATION_VALUE_FOR_BOX_TREND middle_ma_standard_deviation_value_for_box_trend
+#define SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_RAPID_CHANGE short_ma_standard_deviation_value_for_rapid_change
 
 static int ExpertIma::too_short_ima_handle;
 static int ExpertIma::short_ima_handle;
@@ -58,11 +80,46 @@ static TradeAggregatorStruct ExpertIma::trade_aggregator_struct;
 
 static maTradeHistory MyMovingAverage::ma_trade_history_list[];
 
+string target_country_list[2] = {"US", "JP"};
+
 MyAccountInfo myAccountInfo;
 MyLossCutTrade myLossCutTrade;
 MyMovingAverage myMovingAverage;
 MyReversalSign myReversalSign;
 ExpertIma expertIma;
+
+
+/** 取引禁止推奨のイベントの日時を取得
+ * 引数1: 取引禁止推奨イベント日時を格納する配列
+ * 引数2: イベントの重要レベル（ENUM_CALENDAR_EVENT_IMPORTANCE（https://www.mql5.com/ja/docs/constants/structures/mqlcalendar#enum_calendar_event_importance））
+ * 
+**/
+int ExpertIma::GetMyCalendarEvent(MyCalendarEvent &calendar_event_list[]) {
+    ArrayFree(calendar_event_list);
+    datetime current_datetime = TimeTradeServer();  //現在の日付（サーバ時間）
+    MqlDateTime mql_current_datetime;
+    TimeToStruct(current_datetime, mql_current_datetime);
+    mql_current_datetime.day += 1;  //現在から一日後
+    datetime next_datetime = StructToTime(mql_current_datetime);  //datetime型に変換
+
+    MqlCalendarValue mql_calendar_value_list[];
+    if (GetCalendarValueByCountries(mql_calendar_value_list, target_country_list, current_datetime, next_datetime)) {
+        for (int i = 0;i < ArraySize(mql_calendar_value_list);i++) {
+            MqlCalendarEvent mql_calendar_event;
+            if (!GetCalendarEventByEventId(mql_calendar_event, mql_calendar_value_list[i].event_id)) {
+                continue;
+            }
+
+            int my_calendar_event_cnt = ArraySize(calendar_event_list);
+            ArrayResize(calendar_event_list, my_calendar_event_cnt + 1);
+            MyCalendarEvent myCalendarEvent(mql_calendar_event, mql_calendar_value_list[i]);
+            calendar_event_list[i] = myCalendarEvent;
+        }
+        
+    }
+
+    return 1;
+}
 
 int ExpertIma::PrintTimerReport() {
     PrintFormat("移動平均トレードによる売買回数: %d回、損切り回数：%d", ExpertIma::ma_trade_aggregator_struct.trade_num, MyMovingAverage::ma_trade_loss_cnt);
@@ -281,6 +338,9 @@ int ExpertIma::MaTrade() {
 }
 
 bool ExpertIma::MainLoop() {
+    // 経済指標カレンダーチェック
+    
+
      datetime check_ma_datetime = TimeLocal();
     // 移動平均トレード
 
@@ -314,6 +374,10 @@ void OnInit() {
     ArraySetAsSeries(short_ma, true);
     ArraySetAsSeries(middle_ma, true);
     ArraySetAsSeries(long_ma, true);
+
+    ArrayFree(expertIma.my_calendar_event_list);
+    expertIma.GetMyCalendarEvent(expertIma.my_calendar_event_list);
+
 }
 
 void OnTick() {
@@ -324,6 +388,8 @@ void OnTick() {
 }
 
 void OnTimer() {
+    ArrayFree(expertIma.my_calendar_event_list);
+    expertIma.GetMyCalendarEvent(expertIma.my_calendar_event_list);
     expertIma.PrintTimerReport();
 }
 
