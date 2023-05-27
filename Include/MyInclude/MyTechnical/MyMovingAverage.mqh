@@ -55,9 +55,10 @@ class MyMovingAverage {
         double MyMovingAverage::CheckKeepTrendByMa(double &ma_list[], int start_el, int end_el);
         bool MyMovingAverage::IsBoxTrend(const double &ma_list[], int term, double deviation_val);
         bool MyMovingAverage::IsRapidChange(const double &ma_list[], int term, double deviation_val);
+        int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong deal_ticket, double position_deal_profit);
 
     private:
-        int MyMovingAverage::SetMaTradeHistoryForSettlement(ulong position_ticket, ulong deal_ticket, double position_deal_profit);
+        
 };
 
 //+------------------------------------------------------------------+

@@ -23,6 +23,7 @@
 #import "Math.ex5"
     double MathMeanForLong(const CArrayLong &array);
     double MathMeanForDouble(const CArrayDouble &array);
+    double MathDivide(const int molec, const int denom);
 #import
 #import "Common.ex5"
     void ForceStopEa();
@@ -150,11 +151,11 @@ int ExpertIma::PrintTimerReport() {
     PrintFormat("移動平均トレードによる売買回数: %d回、損切り回数：%d", ExpertIma::ma_trade_aggregator_struct.trade_num, MyMovingAverage::ma_trade_loss_cnt);
     PrintFormat("移動平均トレードによる騙し判定：%d回、%f％",
                 ExpertIma::ma_trade_aggregator_struct.settlement_num_by_deception, 
-                (ExpertIma::ma_trade_aggregator_struct.settlement_num_by_deception / ExpertIma::ma_trade_aggregator_struct.trade_num * 100));
+                (MathDivide(ExpertIma::ma_trade_aggregator_struct.settlement_num_by_deception, ExpertIma::ma_trade_aggregator_struct.trade_num) * 100));
     PrintFormat("移動平均トレードのトレンド変化による決済回数:%d回、%f％", ExpertIma::ma_trade_aggregator_struct.settlement_num_by_trend_checker, 
-                (ExpertIma::ma_trade_aggregator_struct.settlement_num_by_trend_checker / ExpertIma::ma_trade_aggregator_struct.trade_num * 100));
+                (MathDivide(ExpertIma::ma_trade_aggregator_struct.settlement_num_by_trend_checker, ExpertIma::ma_trade_aggregator_struct.trade_num) * 100));
     PrintFormat("移動平均トレードのシグナル検知による決済回数:%d回、%f％", ExpertIma::ma_trade_aggregator_struct.settlement_num_by_ma_signal, 
-                (ExpertIma::ma_trade_aggregator_struct.settlement_num_by_ma_signal / ExpertIma::ma_trade_aggregator_struct.trade_num * 100));
+                (MathDivide(ExpertIma::ma_trade_aggregator_struct.settlement_num_by_ma_signal, ExpertIma::ma_trade_aggregator_struct.trade_num) * 100));
     PrintFormat("強制決済回数: %d", ExpertIma::trade_aggregator_struct.loss_cut_total_num);
     PrintFormat("注文取引失敗回数: %d", ExpertIma::trade_aggregator_struct.trade_error_cnt);
     double total_profit = GetTotalSettlementProfit();
@@ -215,6 +216,37 @@ int ExpertIma::PrintCurrentPriceAndMaDiffResult() {
     PrintFormat("最大損失価格：%f", current_price_and_ma_diff_max);
 
     return 1;
+}
+
+/** ポジション全決済
+ * return int 決済数
+**/
+int ExpertIma::SettlementTradeForAllPosition() {
+    int total_position = PositionsTotal();
+    int ret_cnt = 0;
+
+    for (int i = 0; i < total_position; i++) {
+        ulong  position_ticket = PositionGetTicket(i);
+
+        MqlTradeRequest settlement_request={};
+        MqlTradeResult settlement_result={};
+
+        string comment = StringFormat("[決済]重要イベント間近、チケット=%d", position_ticket);
+
+        if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
+            continue;
+        }
+
+        ret_cnt += 1;
+
+        double position_deal_profit = GetSettlementProfit(settlement_result.deal);
+        if (position_deal_profit < 0.0) {
+            MyMovingAverage::ma_trade_loss_cnt += 1;
+        }
+        myMovingAverage.SetMaTradeHistoryForSettlement(position_ticket, settlement_result.deal, position_deal_profit);
+    }
+
+    return ret_cnt;
 }
 
 bool ExpertIma::CreateTradeRequest(MqlTradeRequest &request, double signal) {
@@ -366,6 +398,7 @@ bool ExpertIma::MainLoop() {
         Print("重要イベント間近による非推奨取引日時");
 
         // ポジション全決済
+        ExpertIma::SettlementTradeForAllPosition();
 
         Sleep(default_non_trade_minutes_by_calendar_event * 60 * 100);
         return true;

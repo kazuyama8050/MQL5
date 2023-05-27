@@ -14,6 +14,13 @@
 //| My function                                                      |
 //+------------------------------------------------------------------+
 
+double MathDivide(const int molec, const int denom) export {
+    if (molec == 0 || denom == 0) {
+        return 0.0;
+    }
+    return molec / denom;
+}
+
 double MathMeanForLong(const CArrayLong &array) export {
     int size = array.Total();
     if(size < 1) {return(0.0);}

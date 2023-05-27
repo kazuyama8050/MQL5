@@ -41,6 +41,7 @@ class ExpertIma {
         int ExpertIma::PrintTimerReport();
         int ExpertIma::GetMyCalendarEvent(MyCalendarEvent &my_calendar_event_list[]);
         bool ExpertIma::CheckNonTradeDatetime(MyCalendarEvent &calendar_event_list[], ENUM_CALENDAR_EVENT_IMPORTANCE event_importance, datetime target_datetime);
+        int ExpertIma::SettlementTradeForAllPosition();
     public:
         static int ExpertIma::too_short_ima_handle; // 超短期移動平均線
         static int ExpertIma::short_ima_handle; // 短期移動平均線
