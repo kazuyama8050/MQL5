@@ -31,6 +31,10 @@
     int GetCalendarValueByCountries(MqlCalendarValue &mql_calendar_value_list[], const string &target_country_list[], datetime fromDatetime, datetime toDatetime);
     int GetCalendarEventByEventId(MqlCalendarEvent &mql_calendar_event, ulong event_id);
 #import
+#import "Datetime.ex5"
+    datetime PlusDayForDatetime(datetime target_datetime, uint exchange_day);
+    datetime PlusMinutesForDatetime(datetime target_datetime, uint exchange_minutes);
+#import
 
 input group "ロジック実行許可有無"
 input bool is_use_box_trend_checker_input = true;
@@ -58,6 +62,7 @@ input double short_ma_standard_deviation_value_for_rapid_change = 0.045;
 
 input group "経済指標イベント"
 input ENUM_CALENDAR_EVENT_IMPORTANCE default_non_trade_calendar_event_importance_level = CALENDAR_IMPORTANCE_HIGH;
+input int default_non_trade_minutes_by_calendar_event = 30; 
 
 #define TOO_SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_RAPID_CHANGE too_short_ma_standard_deviation_value_for_rapid_change
 #define SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_BOX_TREND short_ma_standard_deviation_value_for_box_trend
@@ -89,18 +94,38 @@ MyReversalSign myReversalSign;
 ExpertIma expertIma;
 
 
-/** 取引禁止推奨のイベントの日時を取得
- * 引数1: 取引禁止推奨イベント日時を格納する配列
+/** 経済指標イベントから非推奨取引日かどうかチェック
+ * 引数1: MyCalendarEventクラスの配列
  * 引数2: イベントの重要レベル（ENUM_CALENDAR_EVENT_IMPORTANCE（https://www.mql5.com/ja/docs/constants/structures/mqlcalendar#enum_calendar_event_importance））
- * 
+ * 引数3: 対象日時（現在から対象日時）
+ * return bool
+**/
+bool ExpertIma::CheckNonTradeDatetime(MyCalendarEvent &calendar_event_list[], ENUM_CALENDAR_EVENT_IMPORTANCE event_importance, datetime target_datetime) {
+    if (ArraySize(calendar_event_list) < 1) {
+        return false;
+    }
+
+    for (int i = 0;i< ArraySize(calendar_event_list);i++) {        
+        if (calendar_event_list[i].GetEventImportance() < event_importance || !calendar_event_list[i].CanGetEventDatetime()) {
+            continue;
+        }
+
+        if (calendar_event_list[i].GetEventDatetime() <= target_datetime) {
+            return true;
+        }
+
+    }
+    return false;
+}
+
+/** 経済指標カレンダーを取得
+ * 引数1: MyCalendarEventクラスの配列
+ * return int 取得数
 **/
 int ExpertIma::GetMyCalendarEvent(MyCalendarEvent &calendar_event_list[]) {
     ArrayFree(calendar_event_list);
     datetime current_datetime = TimeTradeServer();  //現在の日付（サーバ時間）
-    MqlDateTime mql_current_datetime;
-    TimeToStruct(current_datetime, mql_current_datetime);
-    mql_current_datetime.day += 1;  //現在から一日後
-    datetime next_datetime = StructToTime(mql_current_datetime);  //datetime型に変換
+    datetime next_datetime = PlusDayForDatetime(current_datetime, 1);  // 現在から一日後
 
     MqlCalendarValue mql_calendar_value_list[];
     if (GetCalendarValueByCountries(mql_calendar_value_list, target_country_list, current_datetime, next_datetime)) {
@@ -118,7 +143,7 @@ int ExpertIma::GetMyCalendarEvent(MyCalendarEvent &calendar_event_list[]) {
         
     }
 
-    return 1;
+    return ArraySize(calendar_event_list);
 }
 
 int ExpertIma::PrintTimerReport() {
@@ -242,7 +267,6 @@ int ExpertIma::MaTrade() {
          * → トレンドの見極めが難しいから
         **/
         if (myMovingAverage.IsBoxTrend(short_ma, 10, SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_BOX_TREND) && myMovingAverage.IsBoxTrend(middle_ma, 20, MIDDLE_MA_STANDARD_DEVIATION_VALUE_FOR_BOX_TREND)) {
-            Print("ボックス相場検知");
             can_ma_trend_checker = false;
         }
     }
@@ -252,7 +276,6 @@ int ExpertIma::MaTrade() {
          * 急激な相場変動の場合は何もしない
         **/
         if (myMovingAverage.IsRapidChange(too_short_ma, 2, TOO_SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_RAPID_CHANGE) || myMovingAverage.IsRapidChange(short_ma, 2, SHORT_MA_STANDARD_DEVIATION_VALUE_FOR_RAPID_CHANGE)) {
-            Print("急激な相場変動検知");
             can_ma_trend_checker = false;
         }
     }
@@ -339,7 +362,14 @@ int ExpertIma::MaTrade() {
 
 bool ExpertIma::MainLoop() {
     // 経済指標カレンダーチェック
-    
+    if (ExpertIma::CheckNonTradeDatetime(expertIma.my_calendar_event_list, default_non_trade_calendar_event_importance_level, PlusMinutesForDatetime(TimeTradeServer(), default_non_trade_minutes_by_calendar_event))) {
+        Print("重要イベント間近による非推奨取引日時");
+
+        // ポジション全決済
+
+        Sleep(default_non_trade_minutes_by_calendar_event * 60 * 100);
+        return true;
+    }
 
      datetime check_ma_datetime = TimeLocal();
     // 移動平均トレード

@@ -3,8 +3,9 @@
 class MyCalendarEvent
 {
     public:
-        MyCalendarEvent::MyCalendarEvent(MqlCalendarEvent &mql_calendar_event, MqlCalendarValue &mql_calendar_value);
-        MyCalendarEvent::~MyCalendarEvent();
+        MyCalendarEvent() {};
+        MyCalendarEvent(MqlCalendarEvent &mql_calendar_event, MqlCalendarValue &mql_calendar_value);
+        ~MyCalendarEvent();
 
         string MyCalendarEvent::GetEventName();
         ulong MyCalendarEvent::GetEventId();
