@@ -40,6 +40,7 @@
 input group "ロジック実行許可有無"
 input bool is_use_box_trend_checker_input = true;
 input bool is_use_rapid_trend_change_checker_input = true;
+input bool is_use_all_settlement_before_important_calendar_event = true;
 
 input group "ロジック閾値"
 input double force_loss_cut_line_input = 0.05;
@@ -394,14 +395,16 @@ int ExpertIma::MaTrade() {
 
 bool ExpertIma::MainLoop() {
     // 経済指標カレンダーチェック
-    if (ExpertIma::CheckNonTradeDatetime(expertIma.my_calendar_event_list, default_non_trade_calendar_event_importance_level, PlusMinutesForDatetime(TimeTradeServer(), default_non_trade_minutes_by_calendar_event))) {
-        Print("重要イベント間近による非推奨取引日時");
+    if (is_use_all_settlement_before_important_calendar_event) {
+        if (ExpertIma::CheckNonTradeDatetime(expertIma.my_calendar_event_list, default_non_trade_calendar_event_importance_level, PlusMinutesForDatetime(TimeTradeServer(), default_non_trade_minutes_by_calendar_event))) {
+            Print("重要イベント間近による非推奨取引日時");
 
-        // ポジション全決済
-        ExpertIma::SettlementTradeForAllPosition();
+            // ポジション全決済
+            ExpertIma::SettlementTradeForAllPosition();
 
-        Sleep(default_non_trade_minutes_by_calendar_event * 60 * 100);
-        return true;
+            Sleep(default_non_trade_minutes_by_calendar_event * 60 * 100);
+            return true;
+        }
     }
 
      datetime check_ma_datetime = TimeLocal();
