@@ -7,6 +7,9 @@
 #property copyright "Copyright 2023, Kazuki Yamasaki"
 #property link      "https://www.mql5.com"
 #property version   "1.00"
+
+#include <Arrays\ArrayDouble.mqh>
+
 //+------------------------------------------------------------------+
 //| 注文関連ライブラリ                                                  |
 //+------------------------------------------------------------------+
@@ -63,7 +66,7 @@ int PrintTradeResponseMessage(MqlTradeResult &order_response) export {
 **/
 bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response) export {
     //--- リクエストの送信
-    if(!OrderSend(trade_request,order_response)) {
+    if(!OrderSendAsync(trade_request,order_response)) {
         PrintFormat("OrderSend error %d",GetLastError());
     }
 
@@ -71,6 +74,42 @@ bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response) 
         return false;
     }
     
+    return true;
+}
+
+/** 決済
+ * 引数1: MqlTradeRequest構造体
+ * 引数2: MqlTradeResult構造体
+ * 引数3: ポジションチケット
+ * 引数4: ロット数
+ * 引数5: コメント（決済に至った原因など）
+ * return bool
+**/
+bool SettlementTradeByVolume(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, double volume, string comment) export {
+    PositionSelectByTicket(position_ticket);
+    string position_symbol = PositionGetString(POSITION_SYMBOL);
+    ENUM_POSITION_TYPE position_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+
+    settlement_request.action = TRADE_ACTION_DEAL;
+    settlement_request.position = position_ticket;
+    settlement_request.symbol = position_symbol;
+    settlement_request.volume = volume;
+    settlement_request.deviation = 5;
+    settlement_request.comment = comment;
+
+    if (position_type == POSITION_TYPE_BUY) {
+        settlement_request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
+        settlement_request.type = ORDER_TYPE_SELL;
+    } else if (position_type == POSITION_TYPE_SELL) {
+        settlement_request.price=SymbolInfoDouble(position_symbol,SYMBOL_ASK);
+        settlement_request.type = ORDER_TYPE_BUY;
+    } else {
+        return false;
+    }
+
+    if (!TradeOrder(settlement_request, settlement_response)) {
+        return false;
+    }
     return true;
 }
 
@@ -167,13 +206,17 @@ bool IsDeceptionTrade(ulong position_ticket, double allowed_percent) export {
 }
 
 /** 決済済みチケットの損益取得
- * 引数1：ポジションチケット
+ * 引数1：約定チケット
  * return double 損益
 **/
-double GetSettlementProfit(ulong position_ticket) export {
-    HistorySelect(0,TimeCurrent());
-    double position_profit = HistoryDealGetDouble(position_ticket, DEAL_PROFIT);
-    return position_profit;
+double GetSettlementProfit(ulong deal_ticket) export {
+    HistorySelect(0,TimeCurrent());  // 約定履歴を受信
+    if (!HistoryDealSelect(deal_ticket)) {
+        PrintFormat("存在しない約定チケットです, deal_ticket: %d", deal_ticket);
+        return 0.0;
+    }
+    double deal_profit = HistoryDealGetDouble(deal_ticket, DEAL_PROFIT);
+    return deal_profit;
 }
 
 double GetTotalSettlementProfit() export {
@@ -192,4 +235,23 @@ double GetTotalSettlementProfit() export {
         total_profit += GetSettlementProfit(deal_ticket);
     }
     return total_profit;
+}
+
+int GetTotalSettlementProfitList(CArrayDouble &profit_list) export {
+    if (profit_list.Total() > 0) return 0;
+    // 全ての取引履歴を取得
+    // テストトレードの場合、最初の取引履歴は入金となる
+    HistorySelect(0,TimeCurrent());
+    int history_num = HistoryDealsTotal();
+    double total_profit = 0.0;
+
+    for(int i = 0;i < history_num;i++) {
+        ulong deal_ticket = HistoryDealGetTicket(i);
+        if(deal_ticket == 0) {
+            Print("取引履歴の取得失敗");
+            return 0;
+        }
+        profit_list.Add(GetSettlementProfit(deal_ticket));
+    }
+    return 1;
 }
