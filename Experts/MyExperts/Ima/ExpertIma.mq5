@@ -8,12 +8,14 @@
 #include <MyInclude\MyTechnical\MyMovingAverage.mqh>
 #include <MyInclude\MyTechnical\MyReversalSign.mqh>
 #include <MyInclude\MyFundamental\MyCalendarEvent.mqh>
+#include <MyInclude\MyFundamental\MyCountry.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
 #include <Arrays\ArrayLong.mqh>
 #include <Arrays\List.mqh>
 #include "include/ExpertIma.mqh"
 #import "Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
+    double GetSettlementProfit(ulong deal_ticket);
     double GetTotalSettlementProfit();
 #import
 #import "Indicator.ex5"
@@ -127,7 +129,7 @@ bool ExpertIma::CheckNonTradeDatetime(MyCalendarEvent &calendar_event_list[], EN
 int ExpertIma::GetMyCalendarEvent(MyCalendarEvent &calendar_event_list[]) {
     ArrayFree(calendar_event_list);
     datetime current_datetime = TimeTradeServer();  //現在の日付（サーバ時間）
-    datetime next_datetime = PlusDayForDatetime(current_datetime, 1);  // 現在から一日後
+    datetime next_datetime = PlusDayForDatetime(current_datetime, 100);  // 現在から一日後
 
     MqlCalendarValue mql_calendar_value_list[];
     if (GetCalendarValueByCountries(mql_calendar_value_list, target_country_list, current_datetime, next_datetime)) {
@@ -144,6 +146,12 @@ int ExpertIma::GetMyCalendarEvent(MyCalendarEvent &calendar_event_list[]) {
         }
         
     }
+
+    // for (int i = 0;i < ArraySize(calendar_event_list);i++) {
+    //     // if (calendar_event_list[i].event_importance == 3) {
+    //         PrintFormat("time=%s, eventName=%s, eventImportance=%d, eventTimemode=%d, country_id=%d", TimeToString(calendar_event_list[i].event_datetime), calendar_event_list[i].event_name, calendar_event_list[i].event_importance, calendar_event_list[i].event_timemode, calendar_event_list[i].country_id);
+    //     // }
+    // }
 
     return ArraySize(calendar_event_list);
 }
@@ -407,7 +415,7 @@ bool ExpertIma::MainLoop() {
         }
     }
 
-     datetime check_ma_datetime = TimeLocal();
+    datetime check_ma_datetime = TimeLocal();
     // 移動平均トレード
 
     // 前回移動平均トレードから30分未満の場合、騙し判定出なかったか監視する

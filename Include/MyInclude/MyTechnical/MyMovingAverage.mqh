@@ -7,7 +7,7 @@
 #import "Trade.ex5"
     bool IsDeceptionTrade(ulong position_ticket, double allowed_percent);
     bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, string comment);
-    double GetSettlementProfit(ulong position_ticket);
+    double GetSettlementProfit(ulong deal_ticket);
 #import
 #import "Math.ex5"
     double MathMeanForDouble(const CArrayDouble &array);
@@ -34,8 +34,8 @@ struct maTradeHistory
 class MyMovingAverage {
     public:
         double price_diff_mean;
-        static maTradeHistory MyMovingAverage::ma_trade_history_list[];  //移動平均トレード履歴構造体
-        static int MyMovingAverage::ma_trade_loss_cnt;
+        maTradeHistory MyMovingAverage::ma_trade_history_list[];  //移動平均トレード履歴構造体
+        int MyMovingAverage::ma_trade_loss_cnt;
     public:
         MyMovingAverage();
         ~MyMovingAverage();
