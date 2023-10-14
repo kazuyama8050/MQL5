@@ -10,6 +10,7 @@ struct EntryStruct
     int base_point;  // 前回トレードしたポイントが初回売買pipsからいくつ離れているか
     double init_price;  // 初回トレードの売買価格
     int clear_lot_num;  // ポジション整理回数
+    datetime latest_position_trade_datetime;  // 最新ポジションの取引日時
 };
 
 struct TradeAnalysisStruct

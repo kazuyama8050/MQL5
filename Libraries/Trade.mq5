@@ -219,6 +219,26 @@ double GetSettlementProfit(ulong deal_ticket) export {
     return deal_profit;
 }
 
+/** 全保有ポジションの合計損益取得
+ * 
+**/
+double GetAllPositionProfit() export {
+    int total_position = PositionsTotal();
+    double total_profit = 0.0;
+
+    for (int i = 0; i < total_position; i++) {
+        ulong  position_ticket = PositionGetTicket(i);
+        if (position_ticket == 0) {
+            Print("[WARN] cannot get position ticket");
+            continue;
+        }
+        PositionSelectByTicket(position_ticket);
+        double position_profit = PositionGetDouble(POSITION_PROFIT);
+        total_profit += position_profit;
+    }
+    return total_profit;
+}
+
 double GetTotalSettlementProfit() export {
     // 全ての取引履歴を取得
     // テストトレードの場合、最初の取引履歴は入金となる

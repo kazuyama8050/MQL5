@@ -9,6 +9,7 @@
 #import "Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
     double GetTotalSettlementProfit();
+    double GetAllPositionProfit();
     double GetSettlementProfit(ulong deal_ticket);
     int GetTotalSettlementProfitList(CArrayDouble &profit_list);
     bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, string comment);
@@ -22,9 +23,9 @@
     void ForceStopEa();
 #import
 
-double MARTIGALE_PIPS = 0.2;
-int MARTINGALE_MAX_COUNT = 4;
-double INITIAL_VOLUME = 0.01;
+input double MARTIGALE_PIPS = 0.2;
+input int MARTINGALE_MAX_COUNT = 4;
+input double INITIAL_VOLUME = 0.01;
 
 static EntryStruct ExpertMartingale::entry_struct;
 static TradeAnalysisStruct ExpertMartingale::trade_analysis_struct;
@@ -88,6 +89,7 @@ int ExpertMartingale::MainLoop() {
         ExpertMartingale::entry_struct.base_point = 0;  //初回トレード価格を基準とする
         ExpertMartingale::entry_struct.init_price = trade_result.price;  // 初回トレード価格
         ExpertMartingale::trade_analysis_struct.martingale_trade_cnt += 1;
+        ExpertMartingale::entry_struct.latest_position_trade_datetime = TimeLocal();
         return 1;
     }
 
@@ -116,6 +118,25 @@ int ExpertMartingale::MainLoop() {
     {
         Print("セグポイント計算にバグの可能性があるため終了");
         return 0;
+    }
+
+
+    // 連続トレードが指定回数+1を超える && 最新ポジショントレード日時が1日以前 && 初期ボリューム*100000の場合、
+    if (trade_cnt >= MARTINGALE_MAX_COUNT + 1 && 
+        ExpertMartingale::entry_struct.latest_position_trade_datetime < TimeLocal() - ONE_DATE_DATETIME && 
+        GetAllPositionProfit() > INITIAL_VOLUME * 100000
+    ) {
+        Print("ロット数多、1日以上経過、利益が出ているため全決済");
+        if (ExpertMartingale::SettlementAllPosition() == 0) {
+            Print("全決済異常エラーのため異常終了");
+            return 0;
+        }
+        if (PositionsTotal() > 0) {
+            PrintFormat("全決済後にポジションが残っている, total=%d", PositionsTotal());
+            return 0;
+        }
+        ExpertMartingale::InitEntryStruct();
+        return 1;
     }
 
     // 次が買いトレードの場合は、現在のセグメントが次トレードのセグメント以上
@@ -154,6 +175,7 @@ int ExpertMartingale::MainLoop() {
         
         ExpertMartingale::entry_struct.base_point = next_seg_point;
         ExpertMartingale::trade_analysis_struct.martingale_trade_cnt += 1;
+        ExpertMartingale::entry_struct.latest_position_trade_datetime = TimeLocal();
         return 1;
     }
 
@@ -208,8 +230,8 @@ int ExpertMartingale::ClearLot() {
             continue;
         }
 
-        // トータル利益より損失額が小さい場合は全てのロットを決済
-        if (position_profit <= total_benefit) {
+        // トータル利益額より損失額が小さい場合は全てのロットを決済
+        if (MathAbs(position_profit) <= total_benefit) {
             MqlTradeRequest settlement_request={};
             MqlTradeResult settlement_result={};
             string comment = StringFormat("[ポジション調整]損失分、チケット=%d / all", position_ticket);
@@ -227,18 +249,20 @@ int ExpertMartingale::ClearLot() {
 
         int divide_volume_cnt = (int)(position_volume / INITIAL_VOLUME);  // 最小ロット数で分割できる数
         double divide_position_profit = position_profit / divide_volume_cnt;  // 最小ロット分の損失
-        double settlement_volume = (int)(total_benefit / divide_position_profit) * INITIAL_VOLUME;  // ポジション整理対象ロット数
+        double settlement_volume = (int)(total_benefit / MathAbs(divide_position_profit)) * INITIAL_VOLUME;  // ポジション整理対象ロット数
         if (settlement_volume > position_volume) {
             settlement_volume = position_volume;
         }
 
+        if (settlement_volume < INITIAL_VOLUME) continue;
+
         MqlTradeRequest settlement_request={};
         MqlTradeResult settlement_result={};
-        string comment = StringFormat("[ポジション調整]損失分、チケット=%d / %d", position_ticket, settlement_volume);
+        string comment = StringFormat("[ポジション調整]損失分、チケット=%d / %f", position_ticket, settlement_volume);
 
         if (!SettlementTradeByVolume(settlement_request, settlement_result, position_ticket, settlement_volume, comment)) {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-            PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %d", position_ticket, settlement_volume);
+            PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume);
             return 0;
         }
         double deal_profit = GetSettlementProfit(settlement_result.deal);
@@ -387,6 +411,7 @@ void ExpertMartingale::InitEntryStruct() {
     ExpertMartingale::entry_struct.base_point = INIT_BASE_POINT;
     ExpertMartingale::entry_struct.init_price = 0.0;
     ExpertMartingale::entry_struct.clear_lot_num = 0;
+    ExpertMartingale::entry_struct.latest_position_trade_datetime;
 }
 
 void ExpertMartingale::InitTradeAnalysisStruct() {
@@ -408,7 +433,7 @@ void OnTick() {
         ForceStopEa();
         return;
     }
-    Sleep(3600*1); // 1分スリープ
+    Sleep(3600*3); // 1分スリープ
 }
 
 void OnTimer() {
