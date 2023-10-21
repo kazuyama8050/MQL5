@@ -96,6 +96,7 @@ bool SettlementTradeByVolume(MqlTradeRequest &settlement_request, MqlTradeResult
     settlement_request.volume = volume;
     settlement_request.deviation = 5;
     settlement_request.comment = comment;
+    settlement_request.type_filling = ORDER_FILLING_IOC;
 
     if (position_type == POSITION_TYPE_BUY) {
         settlement_request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
@@ -135,6 +136,7 @@ bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settle
     settlement_request.volume = position_volume;
     settlement_request.deviation = 5;
     settlement_request.comment = comment;
+    settlement_request.type_filling = ORDER_FILLING_IOC;
 
     if (position_type == POSITION_TYPE_BUY) {
         settlement_request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
