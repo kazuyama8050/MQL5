@@ -4,6 +4,7 @@
 #include <Arrays\ArrayDouble.mqh>
 #include <Arrays\List.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
+#include <MyInclude\MyFile\MyLogHandler.mqh>
 #include "include/ExpertMartingale.mqh"
 
 #import "Trade.ex5"
@@ -27,8 +28,13 @@ input double MARTIGALE_PIPS = 0.2;
 input int MARTINGALE_MAX_COUNT = 4;
 input double INITIAL_VOLUME = 0.01;
 
+string EXPERT_NAME = "ExpertMartingale";
+string LOG_DIR = "Logs/Martingale";
+
 static EntryStruct ExpertMartingale::entry_struct;
 static TradeAnalysisStruct ExpertMartingale::trade_analysis_struct;
+
+MyLogHandler myLogHandler(LOG_DIR, EXPERT_NAME);
 
 int ExpertMartingale::CreateTradeRequest(MqlTradeRequest &request, bool is_next_buying) {
     double volume_deviation = 0.5;
@@ -40,6 +46,7 @@ int ExpertMartingale::CreateTradeRequest(MqlTradeRequest &request, bool is_next_
     request.deviation = volume_deviation;
     request.magic = MAGIC_NUMBER;
     request.volume = ExpertMartingale::CalcVolumeByTradeCount(trade_cnt + 1);
+    request.type_filling = ORDER_FILLING_IOC;
 
     string trade_comment = "売り";
     if (is_next_buying) {
@@ -63,6 +70,7 @@ int ExpertMartingale::MainLoop() {
     // ロジックバグ
     if (MathAbs(ExpertMartingale::entry_struct.buying_num - ExpertMartingale::entry_struct.selling_num) > 1) {
         Print("ロジックバグ");
+        myLogHandler.WriteLog("[ERROR] ロジックバグ");
         return 0;
     }
     CArrayDouble price_15_list;
@@ -83,6 +91,7 @@ int ExpertMartingale::MainLoop() {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
             ExpertMartingale::SettlementAllPosition();
             Print("注文エラーのため全決済して異常終了");
+            myLogHandler.WriteLog("[ERROR] 注文エラーのため全決済して異常終了");
             return 0;
         }
         ExpertMartingale::entry_struct.buying_num += 1;
@@ -102,10 +111,12 @@ int ExpertMartingale::MainLoop() {
         Print("全決済");
         if (ExpertMartingale::SettlementAllPosition() == 0) {
             Print("全決済異常エラーのため異常終了");
+            myLogHandler.WriteLog("[ERROR] 全決済異常エラーのため異常終了");
             return 0;
         }
         if (PositionsTotal() > 0) {
             PrintFormat("全決済後にポジションが残っている, total=%d", PositionsTotal());
+            myLogHandler.WriteLog(StringFormat("[ERROR] 全決済後にポジションが残っている, total=%d", PositionsTotal()));
             return 0;
         }
         ExpertMartingale::InitEntryStruct();
@@ -129,10 +140,12 @@ int ExpertMartingale::MainLoop() {
         Print("ロット数多、1日以上経過、利益が出ているため全決済");
         if (ExpertMartingale::SettlementAllPosition() == 0) {
             Print("全決済異常エラーのため異常終了");
+            myLogHandler.WriteLog("全決済異常エラーのため異常終了");
             return 0;
         }
         if (PositionsTotal() > 0) {
             PrintFormat("全決済後にポジションが残っている, total=%d", PositionsTotal());
+            myLogHandler.WriteLog(StringFormat("[ERROR] 全決済後にポジションが残っている, total=%d", PositionsTotal()));
             return 0;
         }
         ExpertMartingale::InitEntryStruct();
@@ -150,6 +163,7 @@ int ExpertMartingale::MainLoop() {
             if (!ExpertMartingale::ClearLot()) {
                 ExpertMartingale::SettlementAllPosition();
                 Print("ポジション調整失敗のため全決済して異常終了");
+                myLogHandler.WriteLog("[ERROR] ポジション調整失敗のため全決済して異常終了");
                 return 0;
             }
         }
@@ -165,6 +179,7 @@ int ExpertMartingale::MainLoop() {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
             ExpertMartingale::SettlementAllPosition();
             Print("注文エラーのため全決済して異常終了");
+            myLogHandler.WriteLog("[ERROR] 注文エラーのため全決済して異常終了");
             return 0;
         }
         if (is_next_buying == true) {
@@ -204,6 +219,7 @@ int ExpertMartingale::ClearLot() {
             if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
                 PrintFormat("[ERROR] ポジション調整失敗（利益）, チケット=%d", position_ticket);
+                myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（利益）, チケット=%d", position_ticket));
                 return 0;
             }
 
@@ -238,7 +254,8 @@ int ExpertMartingale::ClearLot() {
 
             if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-                PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all");
+                PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket);
+                myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket));
                 return 0;
             }
             double deal_profit = GetSettlementProfit(settlement_result.deal);
@@ -263,6 +280,7 @@ int ExpertMartingale::ClearLot() {
         if (!SettlementTradeByVolume(settlement_request, settlement_result, position_ticket, settlement_volume, comment)) {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
             PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume);
+            myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume));
             return 0;
         }
         double deal_profit = GetSettlementProfit(settlement_result.deal);
@@ -295,6 +313,7 @@ int ExpertMartingale::SettlementAllPosition() {
         MqlTradeResult settlement_result={};
 
         double position_profit = PositionGetDouble(POSITION_PROFIT);
+        double position_volume = PositionGetDouble(POSITION_VOLUME);
         string comment = StringFormat("[全決済] チケット=%d, %f", position_ticket, position_profit);
 
         if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
@@ -304,10 +323,15 @@ int ExpertMartingale::SettlementAllPosition() {
 
         ret_cnt += 1;
         total_revenue += GetSettlementProfit(settlement_result.deal);
+
+        if (position_volume > ExpertMartingale::trade_analysis_struct.trade_max_volume) {
+            ExpertMartingale::trade_analysis_struct.trade_max_volume = position_volume;
+        }
         
     }
     if (total_revenue <= 0) {
         Print(StringFormat("[WARN]損失発生、損益=%f", total_revenue));
+        myLogHandler.WriteLog(StringFormat("[WARN]損失発生、損益=%f", total_revenue));
     }
     ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Add(total_revenue);
 
@@ -418,6 +442,7 @@ void ExpertMartingale::InitTradeAnalysisStruct() {
     ExpertMartingale::trade_analysis_struct.order_error_cnt = 0;
     ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt = 0;
     ExpertMartingale::trade_analysis_struct.martingale_trade_cnt = 0;
+    ExpertMartingale::trade_analysis_struct.trade_max_volume = 0.0;
 }
 
 void OnInit() {
@@ -438,6 +463,7 @@ void OnTick() {
 
 void OnTimer() {
     ExpertMartingale::PrintTradeAnalysis();
+    myLogHandler.SetLogFileHandler();
 }
 
 void ExpertMartingale::PrintTradeAnalysis() {
@@ -445,7 +471,7 @@ void ExpertMartingale::PrintTradeAnalysis() {
     Print(StringFormat("全決済リクエストの失敗回数=%d", ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt));
 
     int all_settlement_cnt = ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Total();
-    PrintFormat("両建てマーチンゲール手法による取引回数: %d, 決済回数: %d", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt, all_settlement_cnt);
+    PrintFormat("両建てマーチンゲール手法による取引回数: %d, 決済回数: %d, 最大トレードロット数: %f", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt, all_settlement_cnt, ExpertMartingale::trade_analysis_struct.trade_max_volume);
 
     int all_settlement_benefit_cnt = 0;
     double all_settlement_total_benefit = 0.0;
@@ -514,6 +540,13 @@ void ExpertMartingale::PrintTradeAnalysis() {
 
     PrintFormat("[ポジション調整 バグ可能性] 利益ポジションでポジション調整したが実際は損失だった回数: %d", clear_lot_benefit_but_loss_cnt);
     PrintFormat("[ポジション調整 バグ可能性] 損失ポジションでポジション調整したが実際は利益だった回数: %d", clear_lot_losscut_but_benefit_cnt);
+    double spread = iSpread(Symbol(), 0, 0);
+    Print(spread);
+    string company=AccountInfoString(ACCOUNT_COMPANY);
+    Print(company);
+    //--- クライアント名
+    string name=AccountInfoString(ACCOUNT_NAME);
+    Print(name);
 }
 
 void OnDeinit() {

@@ -18,6 +18,7 @@ struct TradeAnalysisStruct
     int order_error_cnt;  // トレードリクエストエラー回数
     int all_settlement_order_error_cnt;  // 全決済リクエストエラー回数
     int martingale_trade_cnt;  // 両建てマーチンゲール手法によるトレード回数
+    double trade_max_volume;
     CArrayDouble all_settlement_profit_list;  // 全決済時トータル損益履歴配列
     CArrayDouble clear_lot_profit_list;  // ポジション調整時トータル損益履歴配列（調整後との調整金額）
     CArrayDouble clear_lot_benefit_list;  // ポジション調整時トータル損益履歴配列（利益分）
