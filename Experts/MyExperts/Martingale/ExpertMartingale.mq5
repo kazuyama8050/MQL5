@@ -7,7 +7,7 @@
 #include <MyInclude\MyFile\MyLogHandler.mqh>
 #include "include/ExpertMartingale.mqh"
 
-#import "Trade.ex5"
+#import "MyLibraries/Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
     double GetTotalSettlementProfit();
     double GetAllPositionProfit();
@@ -16,11 +16,11 @@
     bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, string comment);
     bool SettlementTradeByVolume(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, double volume, string comment);
 #import
-#import "Indicator.ex5"
+#import "MyLibraries/Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
 #import
-#import "Common.ex5"
+#import "MyLibraries/Common.ex5"
     void ForceStopEa();
 #import
 

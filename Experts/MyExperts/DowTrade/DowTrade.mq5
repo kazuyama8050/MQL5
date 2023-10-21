@@ -5,15 +5,15 @@
 #include <MyInclude\MyCommon\MyDatetime.mqh>
 #include "include/DowTrade.mqh"
 
-#import "Trade.ex5"
+#import "MyLibraries/Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
     double GetTotalSettlementProfit();
 #import
-#import "Indicator.ex5"
+#import "MyLibraries/Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
 #import
-#import "Math.ex5"
+#import "MyLibraries/Math.ex5"
     double MathMeanForDouble(const CArrayDouble &array);
     double MathDiffMeanForDouble(const CArrayDouble &array);
     int MathStandardizationDouble(double &ret_array[], const double &array[]);

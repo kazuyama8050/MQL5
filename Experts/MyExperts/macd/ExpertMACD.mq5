@@ -2,10 +2,10 @@
 #include <MyInclude\MyTechnical\MyMACD.mqh>
 #include <MyInclude\MyAccount\MyAccountInfo.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
-#import "Common.ex5"
+#import "MyLibraries/Common.ex5"
     void ForceStopEa();
 #import
-#import "Trade.ex5"
+#import "MyLibraries/Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
     double GetTotalSettlementProfit();
 #import

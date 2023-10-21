@@ -4,21 +4,21 @@
 #include <MyInclude\MyTrade\MyTrade.mqh>
 #include <MyInclude\MyFile\MyFileHandler.mqh>
 #include "../../../Experts/MyExperts/Ima/include/ExpertIma.mqh"
-#import "Trade.ex5"
+#import "MyLibraries/Trade.ex5"
     bool IsDeceptionTrade(ulong position_ticket, double allowed_percent);
     bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, string comment);
     double GetSettlementProfit(ulong deal_ticket);
 #import
-#import "Math.ex5"
+#import "MyLibraries/Math.ex5"
     double MathMeanForDouble(const CArrayDouble &array);
     double MathDiffMeanForDouble(const CArrayDouble &array);
     int MathStandardizationDouble(double &ret_array[], const double &array[]);
     double MathStandardDeviation(const double &array[]);
 #import
-#import "File.ex5"
+#import "MyLibraries/File.ex5"
     string GetValueOfFileKey(int file_handle, string key);
 #import
-#import "Common.ex5"
+#import "MyLibraries/Common.ex5"
     void ForceStopEa();
 #import
 

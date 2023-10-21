@@ -13,28 +13,28 @@
 #include <Arrays\ArrayLong.mqh>
 #include <Arrays\List.mqh>
 #include "include/ExpertIma.mqh"
-#import "Trade.ex5"
+#import "MyLibraries/Trade.ex5"
     bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
     double GetSettlementProfit(ulong deal_ticket);
     double GetTotalSettlementProfit();
 #import
-#import "Indicator.ex5"
+#import "MyLibraries/Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
 #import
-#import "Math.ex5"
+#import "MyLibraries/Math.ex5"
     double MathMeanForLong(const CArrayLong &array);
     double MathMeanForDouble(const CArrayDouble &array);
     double MathDivide(const int molec, const int denom);
 #import
-#import "Common.ex5"
+#import "MyLibraries/Common.ex5"
     void ForceStopEa();
 #import
-#import "CalendarEvent.ex5"
+#import "MyLibraries/CalendarEvent.ex5"
     int GetCalendarValueByCountries(MqlCalendarValue &mql_calendar_value_list[], const string &target_country_list[], datetime fromDatetime, datetime toDatetime);
     int GetCalendarEventByEventId(MqlCalendarEvent &mql_calendar_event, ulong event_id);
 #import
-#import "Datetime.ex5"
+#import "MyLibraries/Datetime.ex5"
     datetime PlusDayForDatetime(datetime target_datetime, uint exchange_day);
     datetime PlusMinutesForDatetime(datetime target_datetime, uint exchange_minutes);
 #import

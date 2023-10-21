@@ -7,7 +7,7 @@
 #include <Indicators\Indicators.mqh>
 #include <MyInclude\MyTrade\MyTrade.mqh>
 
-#import "Indicator.ex5"
+#import "MyLibraries/Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     int GetOpenPriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
@@ -15,7 +15,7 @@
     int GetLowPriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
 #import
 
-#import "Math.ex5"
+#import "MyLibraries/Math.ex5"
     double MathMeanForLong(const CArrayLong &array);
 #import
 
