@@ -21,7 +21,6 @@
 int PrintTradeResponseMessage(MqlTradeResult &order_response) export {
     uint response_code = order_response.retcode;
     string response_message;
-    int is_success;
 
     switch (response_code) {
         case TRADE_RETCODE_DONE:
@@ -46,17 +45,12 @@ int PrintTradeResponseMessage(MqlTradeResult &order_response) export {
             break;
         default:
             response_message = "予期せぬエラーが発生しました。";
+            PrintFormat("売買不成立です。 > %s", response_message);
+            return 0;
     }
 
-    if (response_code == TRADE_RETCODE_DONE) {
-        is_success = 1;
-        PrintFormat("売買成立しました。 symbol = %s volume = %f price = %f", Symbol(), order_response.volume, order_response.price);
-    } else {
-        is_success = 0;
-        PrintFormat("売買不成立です。 > %s", response_message);
-    }
-
-    return is_success;
+    PrintFormat("[注文結果] msg: %s,  symbol = %s volume = %f price = %f", response_message, Symbol(), order_response.volume, order_response.price);
+    return 1;
 }
 
 /** 注文 normal
@@ -65,6 +59,24 @@ int PrintTradeResponseMessage(MqlTradeResult &order_response) export {
  * return bool (取引成功有無)
 **/
 bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response) export {
+    //--- リクエストの送信
+    if(!OrderSend(trade_request,order_response)) {
+        PrintFormat("OrderSend error %d",GetLastError());
+    }
+
+    if (!PrintTradeResponseMessage(order_response)) {
+        return false;
+    }
+    
+    return true;
+}
+
+/** 非同期注文 normal
+ * 引数1: MqlTradeRequest構造体
+ * 引数2: MqlTradeResult構造体
+ * return bool (取引成功有無)
+**/
+bool TradeOrderAsync(MqlTradeRequest &trade_request, MqlTradeResult &order_response) export {
     //--- リクエストの送信
     if(!OrderSendAsync(trade_request,order_response)) {
         PrintFormat("OrderSend error %d",GetLastError());

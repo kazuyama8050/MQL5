@@ -1,8 +1,9 @@
 #include <Object.mqh>
-#include <Trade\Trade.mqh>
 #include <Arrays\ArrayLong.mqh>
 #include <Arrays\ArrayDouble.mqh>
 #include <Arrays\List.mqh>
+#include <Trade\Trade.mqh>
+#include <MyInclude\MyTrade\MyTrade.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
 #include <MyInclude\MyFile\MyLogHandler.mqh>
 #include "include/ExpertMartingale.mqh"
@@ -35,35 +36,49 @@ static EntryStruct ExpertMartingale::entry_struct;
 static TradeAnalysisStruct ExpertMartingale::trade_analysis_struct;
 
 MyLogHandler myLogHandler(LOG_DIR, EXPERT_NAME);
+CMyTrade myTrade;
 
-int ExpertMartingale::CreateTradeRequest(MqlTradeRequest &request, bool is_next_buying) {
-    double volume_deviation = 0.5;
+
+int ExpertMartingale::TradeOrder(bool is_next_buying) {
     int trade_cnt = ExpertMartingale::entry_struct.buying_num + ExpertMartingale::entry_struct.selling_num;
-
-    //--- リクエストのパラメータ
-    request.action = TRADE_ACTION_DEAL;
-    request.symbol = Symbol();
-    request.deviation = volume_deviation;
-    request.magic = MAGIC_NUMBER;
-    request.volume = ExpertMartingale::CalcVolumeByTradeCount(trade_cnt + 1);
-    request.type_filling = ORDER_FILLING_IOC;
-
+    const double volume = ExpertMartingale::CalcVolumeByTradeCount(trade_cnt + 1);
     string trade_comment = "売り";
     if (is_next_buying) {
         trade_comment = "買い";
     }
-    
+    ENUM_ORDER_TYPE order_type;
+    double price;
     if (is_next_buying == true) {  // 買い注文
-        request.type = ORDER_TYPE_BUY;
-        request.price = SymbolInfoDouble(Symbol(),SYMBOL_ASK);
+        order_type = ORDER_TYPE_BUY;
+        price = SymbolInfoDouble(Symbol(),SYMBOL_ASK);
     } else if (is_next_buying == false) {  // 売り注文
-        request.type = ORDER_TYPE_SELL;
-        request.price = SymbolInfoDouble(Symbol(),SYMBOL_BID);
+        order_type = ORDER_TYPE_SELL;
+        price = SymbolInfoDouble(Symbol(),SYMBOL_BID);
     }
-    request.comment = StringFormat("[%d回目]%s : %f * %f", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt+1, trade_comment, request.volume, request.price);
+    const string comment = StringFormat("[%d回目]%s : %f * %f", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt+1, trade_comment, volume, price);
 
-    // PrintFormat("volume=%f, type=%d, price=%f",request.volume, request.type, request.price);
+    if (!myTrade.PositionOpen(Symbol(), order_type, volume, price, 0, 0, comment)) {
+        return 0;
+    }
     return 1;
+}
+
+int ExpertMartingale::OrderRetcode() {
+    uint retcode = myTrade.ResultRetcode();
+    if (retcode == TRADE_RETCODE_REQUOTE || retcode == TRADE_RETCODE_DONE || retcode == TRADE_RETCODE_DONE_PARTIAL) {
+        return 1;
+    }
+    if (retcode == TRADE_RETCODE_MARKET_CLOSED) {
+        myLogHandler.WriteLog("[WARN] 市場閉鎖による取引失敗");
+        Sleep(3600*60);  // 1時間スリープ
+        return 2;
+    }
+
+    ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
+    ExpertMartingale::SettlementAllPosition();
+    Print("注文エラーのため全決済して異常終了");
+    myLogHandler.WriteLog("[ERROR] 注文エラーのため全決済して異常終了");
+    return 0;
 }
 
 int ExpertMartingale::MainLoop() {
@@ -82,21 +97,17 @@ int ExpertMartingale::MainLoop() {
     // トレード実績がない場合はとりあえず買いトレード
     if (trade_cnt == 0) {
         // 注文
-        MqlTradeRequest trade_request={};
-        MqlTradeResult trade_result={};
-        if (!ExpertMartingale::CreateTradeRequest(trade_request, is_next_buying)) {
-            return 0;
-        } 
-        if (!TradeOrder(trade_request, trade_result)) {
-            ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-            ExpertMartingale::SettlementAllPosition();
-            Print("注文エラーのため全決済して異常終了");
-            myLogHandler.WriteLog("[ERROR] 注文エラーのため全決済して異常終了");
+        ExpertMartingale::TradeOrder(is_next_buying);
+        int order_retcode = ExpertMartingale::OrderRetcode();
+        if (order_retcode == 0) {
             return 0;
         }
+
+        if (order_retcode == 2) return 1;  // 市場閉鎖によりスキップ
+
         ExpertMartingale::entry_struct.buying_num += 1;
         ExpertMartingale::entry_struct.base_point = 0;  //初回トレード価格を基準とする
-        ExpertMartingale::entry_struct.init_price = trade_result.price;  // 初回トレード価格
+        ExpertMartingale::entry_struct.init_price = myTrade.ResultPrice();  // 初回トレード価格
         ExpertMartingale::trade_analysis_struct.martingale_trade_cnt += 1;
         ExpertMartingale::entry_struct.latest_position_trade_datetime = TimeLocal();
         return 1;
@@ -170,18 +181,14 @@ int ExpertMartingale::MainLoop() {
 
 
         // 注文
-        MqlTradeRequest trade_request={};
-        MqlTradeResult trade_result={};
-        if (!ExpertMartingale::CreateTradeRequest(trade_request, is_next_buying)) {
-            return 0;
-        } 
-        if (!TradeOrder(trade_request, trade_result)) {
-            ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-            ExpertMartingale::SettlementAllPosition();
-            Print("注文エラーのため全決済して異常終了");
-            myLogHandler.WriteLog("[ERROR] 注文エラーのため全決済して異常終了");
+        ExpertMartingale::TradeOrder(is_next_buying);
+        int order_retcode = ExpertMartingale::OrderRetcode();
+        if (order_retcode == 0) {
             return 0;
         }
+
+        if (order_retcode == 2) return 1;  // 市場閉鎖によりスキップ
+
         if (is_next_buying == true) {
             ExpertMartingale::entry_struct.buying_num += 1;
         } else {
@@ -214,16 +221,18 @@ int ExpertMartingale::ClearLot() {
 
         if (position_profit >= 0) {  // 利益を出しているポジションは決済確定
             string comment = StringFormat("[ポジション調整]利益分、チケット=%d", position_ticket);
-            MqlTradeRequest settlement_request={};
-            MqlTradeResult settlement_result={};
-            if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
+            myTrade.PositionClose(position_ticket, ULONG_MAX, comment);
+            int order_retcode = ExpertMartingale::OrderRetcode();
+            if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
                 PrintFormat("[ERROR] ポジション調整失敗（利益）, チケット=%d", position_ticket);
                 myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（利益）, チケット=%d", position_ticket));
                 return 0;
             }
 
-            double deal_profit = GetSettlementProfit(settlement_result.deal);
+            if (order_retcode == 2) continue;  // 市場閉鎖によりスキップ
+
+            double deal_profit = GetSettlementProfit(myTrade.ResultDeal());
             total_benefit += deal_profit;
             ExpertMartingale::trade_analysis_struct.clear_lot_benefit_list.Add(deal_profit);
             
@@ -248,17 +257,19 @@ int ExpertMartingale::ClearLot() {
 
         // トータル利益額より損失額が小さい場合は全てのロットを決済
         if (MathAbs(position_profit) <= total_benefit) {
-            MqlTradeRequest settlement_request={};
-            MqlTradeResult settlement_result={};
-            string comment = StringFormat("[ポジション調整]損失分、チケット=%d / all", position_ticket);
-
-            if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
+            string comment = StringFormat("[ポジション調整]損失分、チケット=%d", position_ticket);
+            myTrade.PositionClose(position_ticket, ULONG_MAX, comment);
+            int order_retcode = ExpertMartingale::OrderRetcode();
+            if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
                 PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket);
                 myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket));
                 return 0;
             }
-            double deal_profit = GetSettlementProfit(settlement_result.deal);
+
+            if (order_retcode == 2) continue;
+
+            double deal_profit = GetSettlementProfit(myTrade.ResultDeal());
             total_benefit += deal_profit;
             ExpertMartingale::trade_analysis_struct.clear_lot_losscut_list.Add(deal_profit);
             continue;
@@ -273,17 +284,19 @@ int ExpertMartingale::ClearLot() {
 
         if (settlement_volume < INITIAL_VOLUME) continue;
 
-        MqlTradeRequest settlement_request={};
-        MqlTradeResult settlement_result={};
         string comment = StringFormat("[ポジション調整]損失分、チケット=%d / %f", position_ticket, settlement_volume);
-
-        if (!SettlementTradeByVolume(settlement_request, settlement_result, position_ticket, settlement_volume, comment)) {
+        myTrade.PositionClose(position_ticket, ULONG_MAX, settlement_volume, comment);
+        int order_retcode = ExpertMartingale::OrderRetcode();
+        if (order_retcode == 0) {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
             PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume);
             myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume));
             return 0;
         }
-        double deal_profit = GetSettlementProfit(settlement_result.deal);
+
+        if (order_retcode == 2) continue;
+
+        double deal_profit = GetSettlementProfit(myTrade.ResultDeal());
         total_benefit += deal_profit;
         ExpertMartingale::trade_analysis_struct.clear_lot_losscut_list.Add(deal_profit);
                 
@@ -308,21 +321,16 @@ int ExpertMartingale::SettlementAllPosition() {
         if (!PositionSelect(Symbol())) continue;// 対象シンボルのポジションをチケット番号が最も古いものを取得する
         ulong position_ticket = PositionGetInteger(POSITION_TICKET);
         if (position_ticket == 0) continue;
-
-        MqlTradeRequest settlement_request={};
-        MqlTradeResult settlement_result={};
-
-        double position_profit = PositionGetDouble(POSITION_PROFIT);
-        double position_volume = PositionGetDouble(POSITION_VOLUME);
-        string comment = StringFormat("[全決済] チケット=%d, %f", position_ticket, position_profit);
-
-        if (!SettlementTrade(settlement_request, settlement_result, position_ticket, comment)) {
+        if (!myTrade.PositionClose(position_ticket, ULONG_MAX, "全決済")) {
             ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt += 1;
             continue;
         }
 
+        double position_profit = PositionGetDouble(POSITION_PROFIT);
+        double position_volume = PositionGetDouble(POSITION_VOLUME);
+        
         ret_cnt += 1;
-        total_revenue += GetSettlementProfit(settlement_result.deal);
+        total_revenue += GetSettlementProfit(myTrade.ResultDeal());
 
         if (position_volume > ExpertMartingale::trade_analysis_struct.trade_max_volume) {
             ExpertMartingale::trade_analysis_struct.trade_max_volume = position_volume;
@@ -450,6 +458,10 @@ void OnInit() {
     EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
     ExpertMartingale::InitEntryStruct();
     ExpertMartingale::InitTradeAnalysisStruct();
+
+    myTrade.SetAsyncMode(false);
+    myTrade.SetExpertMagicNumber(MAGIC_NUMBER);
+    myTrade.SetTypeFilling(ORDER_FILLING_IOC);
 }
 
 void OnTick() {
@@ -458,7 +470,7 @@ void OnTick() {
         ForceStopEa();
         return;
     }
-    Sleep(3600*3); // 1分スリープ
+    Sleep(3600*1); // 1分スリープ
 }
 
 void OnTimer() {
@@ -540,13 +552,6 @@ void ExpertMartingale::PrintTradeAnalysis() {
 
     PrintFormat("[ポジション調整 バグ可能性] 利益ポジションでポジション調整したが実際は損失だった回数: %d", clear_lot_benefit_but_loss_cnt);
     PrintFormat("[ポジション調整 バグ可能性] 損失ポジションでポジション調整したが実際は利益だった回数: %d", clear_lot_losscut_but_benefit_cnt);
-    double spread = iSpread(Symbol(), 0, 0);
-    Print(spread);
-    string company=AccountInfoString(ACCOUNT_COMPANY);
-    Print(company);
-    //--- クライアント名
-    string name=AccountInfoString(ACCOUNT_NAME);
-    Print(name);
 }
 
 void OnDeinit() {

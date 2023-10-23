@@ -1,5 +1,6 @@
 #include <Arrays\ArrayDouble.mqh>
 
+
 #define MAGIC_NUMBER 123458
 int INIT_BASE_POINT = 0;
 
@@ -31,7 +32,8 @@ class ExpertMartingale {
         static void ExpertMartingale::InitTradeAnalysisStruct();
         static void ExpertMartingale::PrintTradeAnalysis();
         static int ExpertMartingale::MainLoop();
-        static int ExpertMartingale::CreateTradeRequest(MqlTradeRequest &request, bool isNextBuying);
+        static int ExpertMartingale::TradeOrder(bool isNextBuying);
+        static int ExpertMartingale::OrderRetcode();
         static int ExpertMartingale::CalcSegPoint(double latest_price);
         static double ExpertMartingale::CalcRevenue(int seg_point);
         static double ExpertMartingale::CalcRevenueByProfitOrLoss(int seg_point, bool is_benefit_flag);
