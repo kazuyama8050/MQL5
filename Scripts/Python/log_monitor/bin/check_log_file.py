@@ -59,7 +59,7 @@ def main():
         
         mail_body_template = MailHandler.read_mail_body_template(os.path.join(app_dir, "mail", "log_error_template.txt"))
         mail_body = mail_body_template.format(
-            date = target_date.strftime("%Y年%m月%d日"),
+            date = target_date.strftime("%Y-%m-%d"),
             body = mail_body_msg
         )
         MailHandler.send_mail(credential_conf.get("mail", "to_address"), "ログ監視通知", mail_body)
