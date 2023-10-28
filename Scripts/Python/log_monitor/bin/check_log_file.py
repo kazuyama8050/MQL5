@@ -50,7 +50,7 @@ def main():
             for line in f.readlines():
                 if "ERROR" in line or "WARN" in line:
                     a, b, log_time, trade_target, log_msg = line.split("\t")
-                    log_datetime = target_date.strftime("%Y年%m月%d日") + " " + log_time.split(".")[0]
+                    log_datetime = target_date.strftime("%Y-%m-%d") + " " + log_time.split(".")[0]
                     mail_body_msg = mail_body_msg + trade_target + "\t" + log_datetime + "\n" + log_msg + "\n-------------------\n"
         
         if mail_body_msg == "":
