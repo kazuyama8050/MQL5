@@ -5,7 +5,6 @@
 #include <Trade\Trade.mqh>
 #include <MyInclude\MyTrade\MyTrade.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
-#include <MyInclude\MyFile\MyLogHandler.mqh>
 #include "include/ExpertMartingale.mqh"
 
 #import "MyLibraries/Trade.ex5"
@@ -30,12 +29,10 @@ input int MARTINGALE_MAX_COUNT = 4;
 input double INITIAL_VOLUME = 0.01;
 
 string EXPERT_NAME = "ExpertMartingale";
-string LOG_DIR = "Logs/Martingale";
 
 static EntryStruct ExpertMartingale::entry_struct;
 static TradeAnalysisStruct ExpertMartingale::trade_analysis_struct;
 
-MyLogHandler myLogHandler(LOG_DIR, EXPERT_NAME);
 CMyTrade myTrade;
 
 
@@ -69,23 +66,21 @@ int ExpertMartingale::OrderRetcode() {
         return 1;
     }
     if (retcode == TRADE_RETCODE_MARKET_CLOSED) {
-        myLogHandler.WriteLog("[WARN] 市場閉鎖による取引失敗");
+        Print("[WARN] 市場閉鎖による取引失敗");
         Sleep(3600*60);  // 1時間スリープ
         return 2;
     }
 
     ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
     ExpertMartingale::SettlementAllPosition();
-    Print("注文エラーのため全決済して異常終了");
-    myLogHandler.WriteLog("[ERROR] 注文エラーのため全決済して異常終了");
+    Print("[ERROR] 注文エラーのため全決済して異常終了");
     return 0;
 }
 
 int ExpertMartingale::MainLoop() {
     // ロジックバグ
     if (MathAbs(ExpertMartingale::entry_struct.buying_num - ExpertMartingale::entry_struct.selling_num) > 1) {
-        Print("ロジックバグ");
-        myLogHandler.WriteLog("[ERROR] ロジックバグ");
+        Print("[ERROR] ロジックバグ");
         return 0;
     }
     CArrayDouble price_15_list;
@@ -119,16 +114,12 @@ int ExpertMartingale::MainLoop() {
 
     // トータルで利益が出ていれば全決済
     if (is_revenue) {
-        Print("全決済");
         if (ExpertMartingale::SettlementAllPosition() == 0) {
-            Print("全決済異常エラーのため異常終了");
-            myLogHandler.WriteLog("[ERROR] 全決済異常エラーのため異常終了");
+            Print("[ERROR] 全決済異常エラーのため異常終了");
             return 0;
         }
         if (PositionsTotal() > 0) {
-            PrintFormat("全決済後にポジションが残っている, total=%d", PositionsTotal());
-            myLogHandler.WriteLog(StringFormat("[ERROR] 全決済後にポジションが残っている, total=%d", PositionsTotal()));
-            return 0;
+            PrintFormat("[WARN] 全決済後にポジションが残っている, total=%d", PositionsTotal());
         }
         ExpertMartingale::InitEntryStruct();
         return 1;
@@ -138,7 +129,7 @@ int ExpertMartingale::MainLoop() {
     if ((is_next_buying == true && next_seg_point <= 0) ||
         (is_next_buying == false && next_seg_point >= 0))
     {
-        Print("セグポイント計算にバグの可能性があるため終了");
+        Print("[ERROR] セグポイント計算にバグの可能性があるため終了");
         return 0;
     }
 
@@ -148,15 +139,13 @@ int ExpertMartingale::MainLoop() {
         ExpertMartingale::entry_struct.latest_position_trade_datetime < TimeLocal() - ONE_DATE_DATETIME && 
         GetAllPositionProfit() > INITIAL_VOLUME * 100000
     ) {
-        Print("ロット数多、1日以上経過、利益が出ているため全決済");
+        Print("[NOTICE] ロット数多、1日以上経過、利益が出ているため全決済");
         if (ExpertMartingale::SettlementAllPosition() == 0) {
-            Print("全決済異常エラーのため異常終了");
-            myLogHandler.WriteLog("全決済異常エラーのため異常終了");
+            Print("[ERROR] 全決済異常エラーのため異常終了");
             return 0;
         }
         if (PositionsTotal() > 0) {
-            PrintFormat("全決済後にポジションが残っている, total=%d", PositionsTotal());
-            myLogHandler.WriteLog(StringFormat("[ERROR] 全決済後にポジションが残っている, total=%d", PositionsTotal()));
+            PrintFormat("[ERROR] 全決済後にポジションが残っている, total=%d", PositionsTotal());
             return 0;
         }
         ExpertMartingale::InitEntryStruct();
@@ -173,8 +162,7 @@ int ExpertMartingale::MainLoop() {
         if (trade_cnt >= MARTINGALE_MAX_COUNT) {
             if (!ExpertMartingale::ClearLot()) {
                 ExpertMartingale::SettlementAllPosition();
-                Print("ポジション調整失敗のため全決済して異常終了");
-                myLogHandler.WriteLog("[ERROR] ポジション調整失敗のため全決済して異常終了");
+                Print("[ERROR] ポジション調整失敗のため全決済して異常終了");
                 return 0;
             }
         }
@@ -220,13 +208,12 @@ int ExpertMartingale::ClearLot() {
         if (position_ticket == 0 || position_volume == 0.0) continue;
 
         if (position_profit >= 0) {  // 利益を出しているポジションは決済確定
-            string comment = StringFormat("[ポジション調整]利益分、チケット=%d", position_ticket);
+            string comment = StringFormat("[ポジション調整] 利益分、チケット=%d", position_ticket);
             myTrade.PositionClose(position_ticket, ULONG_MAX, comment);
             int order_retcode = ExpertMartingale::OrderRetcode();
             if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-                PrintFormat("[ERROR] ポジション調整失敗（利益）, チケット=%d", position_ticket);
-                myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（利益）, チケット=%d", position_ticket));
+                PrintFormat("[WARN] ポジション調整失敗（利益）, チケット=%d", position_ticket);
                 return 0;
             }
 
@@ -257,13 +244,12 @@ int ExpertMartingale::ClearLot() {
 
         // トータル利益額より損失額が小さい場合は全てのロットを決済
         if (MathAbs(position_profit) <= total_benefit) {
-            string comment = StringFormat("[ポジション調整]損失分、チケット=%d", position_ticket);
+            string comment = StringFormat("[ポジション調整] 損失分、チケット=%d", position_ticket);
             myTrade.PositionClose(position_ticket, ULONG_MAX, comment);
             int order_retcode = ExpertMartingale::OrderRetcode();
             if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
                 PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket);
-                myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket));
                 return 0;
             }
 
@@ -290,7 +276,6 @@ int ExpertMartingale::ClearLot() {
         if (order_retcode == 0) {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
             PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume);
-            myLogHandler.WriteLog(StringFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume));
             return 0;
         }
 
@@ -338,8 +323,7 @@ int ExpertMartingale::SettlementAllPosition() {
         
     }
     if (total_revenue <= 0) {
-        Print(StringFormat("[WARN]損失発生、損益=%f", total_revenue));
-        myLogHandler.WriteLog(StringFormat("[WARN]損失発生、損益=%f", total_revenue));
+        Print(StringFormat("[WARN] 損失発生、損益=%f", total_revenue));
     }
     ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Add(total_revenue);
 
@@ -454,7 +438,8 @@ void ExpertMartingale::InitTradeAnalysisStruct() {
 }
 
 void OnInit() {
-    Print("Start");
+    PrintFormat("Start ExpertMartingale, symbol: %s", Symbol());
+
     EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
     ExpertMartingale::InitEntryStruct();
     ExpertMartingale::InitTradeAnalysisStruct();
@@ -467,6 +452,7 @@ void OnInit() {
 void OnTick() {
     if (!ExpertMartingale::MainLoop()) {
         ExpertMartingale::PrintTradeAnalysis();
+        PrintFormat("[ERROR] Exception Thrown, so Finished ExpertMartingale, symbol: %s", Symbol());
         ForceStopEa();
         return;
     }
@@ -475,15 +461,14 @@ void OnTick() {
 
 void OnTimer() {
     ExpertMartingale::PrintTradeAnalysis();
-    myLogHandler.SetLogFileHandler();
 }
 
 void ExpertMartingale::PrintTradeAnalysis() {
-    Print(StringFormat("トレードリクエストの失敗回数=%d", ExpertMartingale::trade_analysis_struct.order_error_cnt));
-    Print(StringFormat("全決済リクエストの失敗回数=%d", ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt));
+    Print(StringFormat("[SUMMARY] トレードリクエストの失敗回数=%d", ExpertMartingale::trade_analysis_struct.order_error_cnt));
+    Print(StringFormat("[SUMMARY] 全決済リクエストの失敗回数=%d", ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt));
 
     int all_settlement_cnt = ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Total();
-    PrintFormat("両建てマーチンゲール手法による取引回数: %d, 決済回数: %d, 最大トレードロット数: %f", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt, all_settlement_cnt, ExpertMartingale::trade_analysis_struct.trade_max_volume);
+    PrintFormat("[SUMMARY] 両建てマーチンゲール手法による取引回数: %d, 決済回数: %d, 最大トレードロット数: %f", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt, all_settlement_cnt, ExpertMartingale::trade_analysis_struct.trade_max_volume);
 
     int all_settlement_benefit_cnt = 0;
     double all_settlement_total_benefit = 0.0;
@@ -501,7 +486,7 @@ void ExpertMartingale::PrintTradeAnalysis() {
         }
         all_settlement_total_profit += all_settlement_profit;
     }
-    PrintFormat("[全決済履歴] total=%f, 利益: %d, avg=%f, 損失: %d, avg=%f", 
+    PrintFormat("[SUMMARY] [全決済履歴] total=%f, 利益: %d, avg=%f, 損失: %d, avg=%f", 
                 all_settlement_total_profit, 
                 all_settlement_benefit_cnt, all_settlement_total_benefit / all_settlement_benefit_cnt, 
                 all_settlement_loss_cnt, all_settlement_total_loss / all_settlement_loss_cnt
@@ -510,10 +495,10 @@ void ExpertMartingale::PrintTradeAnalysis() {
     int clear_lot_cnt = ExpertMartingale::trade_analysis_struct.clear_lot_profit_list.Total();
     int clear_lot_benefit_cnt = ExpertMartingale::trade_analysis_struct.clear_lot_benefit_list.Total();
     int clear_lot_losscut_cnt = ExpertMartingale::trade_analysis_struct.clear_lot_losscut_list.Total();
-    PrintFormat("[ポジション調整履歴] ポジション調整数: %d 利益調整数: %d, 損失調整数: %d", clear_lot_cnt, clear_lot_benefit_cnt, clear_lot_losscut_cnt);
+    PrintFormat("[SUMMARY] [ポジション調整履歴] ポジション調整数: %d 利益調整数: %d, 損失調整数: %d", clear_lot_cnt, clear_lot_benefit_cnt, clear_lot_losscut_cnt);
 
     double total_profit = GetTotalSettlementProfit();
-    PrintFormat("現在までの累積損益：%f円", total_profit);
+    PrintFormat("[SUMMARY] 現在までの累積損益：%f円", total_profit);
 
     int clear_lot_final_benefit_cnt = 0;
     int clear_lot_final_losscut_cnt = 0;
@@ -529,7 +514,7 @@ void ExpertMartingale::PrintTradeAnalysis() {
             clear_lot_final_total_losscut += clear_lot_final_profit;
         }
     }
-    PrintFormat("[ポジション調整履歴] 利益: %d, avg=%f, 損失: %d, avg=%f", 
+    PrintFormat("[SUMMARY] [ポジション調整履歴] 利益: %d, avg=%f, 損失: %d, avg=%f", 
                 clear_lot_final_benefit_cnt, clear_lot_final_total_benefit / clear_lot_final_benefit_cnt, 
                 clear_lot_final_losscut_cnt, clear_lot_final_total_losscut / clear_lot_final_losscut_cnt
     );
@@ -550,8 +535,8 @@ void ExpertMartingale::PrintTradeAnalysis() {
         }
     }
 
-    PrintFormat("[ポジション調整 バグ可能性] 利益ポジションでポジション調整したが実際は損失だった回数: %d", clear_lot_benefit_but_loss_cnt);
-    PrintFormat("[ポジション調整 バグ可能性] 損失ポジションでポジション調整したが実際は利益だった回数: %d", clear_lot_losscut_but_benefit_cnt);
+    PrintFormat("[SUMMARY] [ポジション調整 バグ可能性] 利益ポジションでポジション調整したが実際は損失だった回数: %d", clear_lot_benefit_but_loss_cnt);
+    PrintFormat("[SUMMARY] [ポジション調整 バグ可能性] 損失ポジションでポジション調整したが実際は利益だった回数: %d", clear_lot_losscut_but_benefit_cnt);
 }
 
 void OnDeinit() {
