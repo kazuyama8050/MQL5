@@ -16,8 +16,8 @@ from mail_handler import MailHandler
 def get_options():
     usage = "usage: %prog (Argument-1) [options]"
     parser = ArgumentParser(usage=usage)
-    parser.add_argument("-d", "--dir", dest="dir", action="store", help="dir", default="", type=str)
-    parser.add_argument("-t", "--target", dest="target", action="store", help="target", default="today", type=str)
+    parser.add_argument("-d", "--dir", dest="dir", action="store", help="dir", default="C:/Users/Administrator/AppData/Roaming/MetaQuotes/Terminal/2FA8A7E69CED7DC259B1AD86A247F675/MQL5/Logs", type=str)
+    parser.add_argument("-t", "--target", dest="target", action="store", help="target", default="yesterday", type=str)
     parser.add_argument("-l", "--log_type", dest="log_type", action="store", help="log_type", default="ERROR,WARN", type=str)
     return parser.parse_args()
 
