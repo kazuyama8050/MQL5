@@ -69,9 +69,11 @@ int ExpertMartingale::TradeOrder(bool is_next_buying) {
     return 1;
 }
 
-int ExpertMartingale::OrderRetcode() {
+int ExpertMartingale::OrderRetcode(bool is_open) {
     uint retcode = myTrade.ResultRetcode();
     if (retcode == TRADE_RETCODE_REQUOTE || retcode == TRADE_RETCODE_DONE || retcode == TRADE_RETCODE_DONE_PARTIAL) {
+        string is_open_str = (is_open) ? "Open" : "Close";
+        PrintFormat("[NOTICE] ポジション %s comment: %s", is_open_str, myTrade.ResultComment());
         return 1;
     }
     if (retcode == TRADE_RETCODE_MARKET_CLOSED) {
@@ -112,11 +114,10 @@ int ExpertMartingale::MainLoop() {
     if (trade_cnt == 0) {
         // 注文
         ExpertMartingale::TradeOrder(is_next_buying);
-        int order_retcode = ExpertMartingale::OrderRetcode();
+        int order_retcode = ExpertMartingale::OrderRetcode(true);
         if (order_retcode == 0) {
             return 0;
         }
-
         if (order_retcode == 2) return 1;  // 市場閉鎖によりスキップ
 
         ExpertMartingale::entry_struct.buying_num += 1;
@@ -189,7 +190,7 @@ int ExpertMartingale::MainLoop() {
 
         // 注文
         ExpertMartingale::TradeOrder(is_next_buying);
-        int order_retcode = ExpertMartingale::OrderRetcode();
+        int order_retcode = ExpertMartingale::OrderRetcode(true);
         if (order_retcode == 0) {
             return 0;
         }
@@ -229,7 +230,7 @@ int ExpertMartingale::ClearLot() {
         if (position_profit >= 0) {  // 利益を出しているポジションは決済確定
             string comment = StringFormat("[ポジション調整] 利益分、チケット=%d", position_ticket);
             myTrade.PositionClose(position_ticket, ULONG_MAX, comment);
-            int order_retcode = ExpertMartingale::OrderRetcode();
+            int order_retcode = ExpertMartingale::OrderRetcode(false);
             if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
                 PrintFormat("[WARN] ポジション調整失敗（利益）, チケット=%d", position_ticket);
@@ -265,7 +266,7 @@ int ExpertMartingale::ClearLot() {
         if (MathAbs(position_profit) <= total_benefit) {
             string comment = StringFormat("[ポジション調整] 損失分、チケット=%d", position_ticket);
             myTrade.PositionClose(position_ticket, ULONG_MAX, comment);
-            int order_retcode = ExpertMartingale::OrderRetcode();
+            int order_retcode = ExpertMartingale::OrderRetcode(false);
             if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
                 PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket);
@@ -291,7 +292,7 @@ int ExpertMartingale::ClearLot() {
 
         string comment = StringFormat("[ポジション調整]損失分、チケット=%d / %f", position_ticket, settlement_volume);
         myTrade.PositionClose(position_ticket, ULONG_MAX, settlement_volume, comment);
-        int order_retcode = ExpertMartingale::OrderRetcode();
+        int order_retcode = ExpertMartingale::OrderRetcode(false);
         if (order_retcode == 0) {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
             PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume);
