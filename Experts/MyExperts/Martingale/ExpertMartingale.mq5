@@ -25,6 +25,12 @@
     void PrintNotice(const string log_str);
     void PrintWarn(const string log_str);
     void PrintError(const string log_str);
+    int SearchAndMailFromLog(datetime target_date, string expert_name, string sig, string title);
+#import
+
+#import "MyLibraries/Datetime.ex5"
+    datetime MinusDayForDatetime(datetime target_datetime, uint exchange_day);
+    int GetDayOfWeekFromDatetime(datetime target_datetime);
 #import
 
 input group "ロジック閾値"
@@ -345,7 +351,7 @@ int ExpertMartingale::SettlementAllPosition() {
         }
         
     }
-    if (total_revenue <= 0) {
+    if (total_revenue < 0) {
         PrintWarn(StringFormat("損失発生、損益=%f", total_revenue));
     }
     ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Add(total_revenue);
@@ -480,6 +486,12 @@ void OnTick() {
 
 void OnTimer() {
     ExpertMartingale::PrintTradeAnalysis();
+    if (!SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), EXPERT_NAME, "ERROR,WARN", "バグ検知_daily")) {
+        PrintError("バグ検知_dailyのメール送信失敗");
+    }
+    if (!SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), EXPERT_NAME, "SUMMARY", "サマリー_daily")) {
+        PrintError("サマリー_dailyのメール送信失敗");
+    }
 }
 
 void OnDeinit() {

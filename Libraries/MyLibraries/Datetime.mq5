@@ -76,6 +76,18 @@ string ConvertFormattedDate(datetime target_datetime) export {
 
 /** datetime型を文字列に変換する
  * args1 変換前datetime
+ * return string YYYY-mm-dd
+**/
+string ConvertDatetimeToDateString(datetime target_datetime) export {
+    MqlDateTime datetime_struct;
+    TimeToStruct(target_datetime, datetime_struct);
+    string formattedDate = StringFormat("%04d-%02d-%02d",
+    datetime_struct.year, datetime_struct.mon, datetime_struct.day);
+    return formattedDate;
+}
+
+/** datetime型を文字列に変換する
+ * args1 変換前datetime
  * return string YYYY-mm-dd HH:mm:ss
 **/
 string ConvertDatetimeToString(datetime target_datetime) export {
@@ -85,4 +97,14 @@ string ConvertDatetimeToString(datetime target_datetime) export {
     datetime_struct.year, datetime_struct.mon, datetime_struct.day, 
     datetime_struct.hour, datetime_struct.min, datetime_struct.sec);
     return formattedDate;
+}
+
+/** datetime型から曜日を取得する
+ * args1 変換前datetime
+ * return int（日曜日から0スタート）
+**/
+int GetDayOfWeekFromDatetime(datetime target_datetime) export {
+    MqlDateTime datetime_struct;
+    TimeToStruct(target_datetime, datetime_struct);
+    return datetime_struct.day_of_week;
 }

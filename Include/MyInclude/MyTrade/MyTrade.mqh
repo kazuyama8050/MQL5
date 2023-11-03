@@ -18,10 +18,10 @@ class CMyTrade : public CTrade
 protected:
 
 public:
-                     CMyTrade(void);
-                    ~CMyTrade(void);
-                    bool CMyTrade::PositionClose(const ulong ticket,const ulong deviation, const string comment);
-					bool CMyTrade::PositionClose(const ulong ticket,const ulong deviation, double volume, const string comment);
+   CMyTrade(void);
+   ~CMyTrade(void);
+   bool CMyTrade::PositionClose(const ulong ticket,const ulong deviation, const string comment);
+   bool CMyTrade::PositionClose(const ulong ticket,const ulong deviation, double volume, const string comment);
 
 
   };
