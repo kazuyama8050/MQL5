@@ -73,7 +73,7 @@ int ExpertMartingale::OrderRetcode(bool is_open) {
     uint retcode = myTrade.ResultRetcode();
     if (retcode == TRADE_RETCODE_REQUOTE || retcode == TRADE_RETCODE_DONE || retcode == TRADE_RETCODE_DONE_PARTIAL) {
         string is_open_str = (is_open) ? "Open" : "Close";
-        PrintFormat("[NOTICE] ポジション %s comment: %s", is_open_str, myTrade.ResultComment());
+        PrintFormat("[NOTICE] ポジション %s comment: request=%s, result=%s", is_open_str, myTrade.RequestComment(), myTrade.ResultComment());
         return 1;
     }
     if (retcode == TRADE_RETCODE_MARKET_CLOSED) {
