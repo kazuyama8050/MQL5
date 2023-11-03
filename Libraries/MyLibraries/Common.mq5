@@ -15,6 +15,6 @@
  * 
 **/
 void ForceStopEa() export {
-    Alert("予期せぬエラーが発生しました。");
+    Alert("[ERROR] 予期せぬエラーが発生しました。");
     ExpertRemove();
 }
