@@ -22,6 +22,9 @@
 #import
 #import "MyLibraries/Common.ex5"
     void ForceStopEa();
+    void PrintNotice(const string log_str);
+    void PrintWarn(const string log_str);
+    void PrintError(const string log_str);
 #import
 
 input group "ロジック閾値"
@@ -73,25 +76,25 @@ int ExpertMartingale::OrderRetcode(bool is_open) {
     uint retcode = myTrade.ResultRetcode();
     if (retcode == TRADE_RETCODE_REQUOTE || retcode == TRADE_RETCODE_DONE || retcode == TRADE_RETCODE_DONE_PARTIAL) {
         string is_open_str = (is_open) ? "Open" : "Close";
-        PrintFormat("[NOTICE] ポジション %s comment: request=%s, result=%s", is_open_str, myTrade.RequestComment(), myTrade.ResultComment());
+        PrintNotice(StringFormat("ポジション %s comment: request=%s, result=%s", is_open_str, myTrade.RequestComment(), myTrade.ResultComment()));
         return 1;
     }
     if (retcode == TRADE_RETCODE_MARKET_CLOSED) {
-        Print("[WARN] 市場閉鎖による取引失敗");
+        PrintWarn("市場閉鎖による取引失敗");
         Sleep(3600*60);  // 1時間スリープ
         return 2;
     }
 
     ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
     ExpertMartingale::SettlementAllPosition();
-    Print("[ERROR] 注文エラーのため全決済して異常終了");
+    PrintError("注文エラーのため全決済して異常終了");
     return 0;
 }
 
 int ExpertMartingale::MainLoop() {
     // ロジックバグ
     if (MathAbs(ExpertMartingale::entry_struct.buying_num - ExpertMartingale::entry_struct.selling_num) > 1) {
-        Print("[ERROR] ロジックバグ");
+        PrintError("ロジックバグ");
         return 0;
     }
     CArrayDouble price_15_list;
@@ -103,9 +106,9 @@ int ExpertMartingale::MainLoop() {
     // トレード実績がなく、強制停止シグナルがある場合は終了
     if (trade_cnt == 0 && IS_FORCE_STOPPED) {
         ExpertMartingale::SettlementAllPosition();
-        Print("[NOTICE] 強制終了シグナルを受け取ったため全決済");
+        PrintNotice("強制終了シグナルを受け取ったため全決済");
         ExpertMartingale::PrintTradeAnalysis();
-        PrintFormat("[NOTICE] Force Stopped Flag Thrown, so Finished ExpertMartingale, symbol: %s", Symbol());
+        PrintNotice(StringFormat("Force Stopped Flag Thrown, so Finished ExpertMartingale, symbol: %s", Symbol()));
         ForceStopEa();
         return 1;
     }
@@ -135,11 +138,11 @@ int ExpertMartingale::MainLoop() {
     // トータルで利益が出ていれば全決済
     if (is_revenue) {
         if (ExpertMartingale::SettlementAllPosition() == 0) {
-            Print("[ERROR] 全決済異常エラーのため異常終了");
+            PrintError("全決済異常エラーのため異常終了");
             return 0;
         }
         if (PositionsTotal() > 0) {
-            PrintFormat("[WARN] 全決済後にポジションが残っている, total=%d", PositionsTotal());
+            PrintWarn(StringFormat("全決済後にポジションが残っている, total=%d", PositionsTotal()));
         }
         ExpertMartingale::InitEntryStruct();
         return 1;
@@ -149,7 +152,7 @@ int ExpertMartingale::MainLoop() {
     if ((is_next_buying == true && next_seg_point <= 0) ||
         (is_next_buying == false && next_seg_point >= 0))
     {
-        Print("[ERROR] セグポイント計算にバグの可能性があるため終了");
+        PrintError("セグポイント計算にバグの可能性があるため終了");
         return 0;
     }
 
@@ -159,13 +162,13 @@ int ExpertMartingale::MainLoop() {
         ExpertMartingale::entry_struct.latest_position_trade_datetime < TimeLocal() - ONE_DATE_DATETIME && 
         GetAllPositionProfit() > INITIAL_VOLUME * LONG_TRADE_PROFIT_POINT
     ) {
-        Print("[NOTICE] ロット数多、1日以上経過、利益が出ているため全決済");
+        PrintNotice("ロット数多、1日以上経過、利益が出ているため全決済");
         if (ExpertMartingale::SettlementAllPosition() == 0) {
-            Print("[ERROR] 全決済異常エラーのため異常終了");
+            PrintError("全決済異常エラーのため異常終了");
             return 0;
         }
         if (PositionsTotal() > 0) {
-            PrintFormat("[ERROR] 全決済後にポジションが残っている, total=%d", PositionsTotal());
+            PrintError(StringFormat("全決済後にポジションが残っている, total=%d", PositionsTotal()));
             return 0;
         }
         ExpertMartingale::InitEntryStruct();
@@ -182,7 +185,7 @@ int ExpertMartingale::MainLoop() {
         if (trade_cnt >= MARTINGALE_MAX_COUNT) {
             if (!ExpertMartingale::ClearLot()) {
                 ExpertMartingale::SettlementAllPosition();
-                Print("[ERROR] ポジション調整失敗のため全決済して異常終了");
+                PrintError("ポジション調整失敗のため全決済して異常終了");
                 return 0;
             }
         }
@@ -233,7 +236,7 @@ int ExpertMartingale::ClearLot() {
             int order_retcode = ExpertMartingale::OrderRetcode(false);
             if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-                PrintFormat("[WARN] ポジション調整失敗（利益）, チケット=%d", position_ticket);
+                PrintWarn(StringFormat("ポジション調整失敗（利益）, チケット=%d", position_ticket));
                 return 0;
             }
 
@@ -269,7 +272,7 @@ int ExpertMartingale::ClearLot() {
             int order_retcode = ExpertMartingale::OrderRetcode(false);
             if (order_retcode == 0) {
                 ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-                PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / all", position_ticket);
+                PrintError(StringFormat("ポジション調整失敗（損失）, チケット=%d / all", position_ticket));
                 return 0;
             }
 
@@ -295,7 +298,7 @@ int ExpertMartingale::ClearLot() {
         int order_retcode = ExpertMartingale::OrderRetcode(false);
         if (order_retcode == 0) {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-            PrintFormat("[ERROR] ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume);
+            PrintError(StringFormat("ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume));
             return 0;
         }
 
@@ -343,7 +346,7 @@ int ExpertMartingale::SettlementAllPosition() {
         
     }
     if (total_revenue <= 0) {
-        Print(StringFormat("[WARN] 損失発生、損益=%f", total_revenue));
+        PrintWarn(StringFormat("損失発生、損益=%f", total_revenue));
     }
     ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Add(total_revenue);
 
@@ -443,25 +446,23 @@ int ExpertMartingale::CalcSegPoint(double latest_price) {
 
 
 void OnInit() {
-    PrintFormat("Start ExpertMartingale, symbol: %s", Symbol());
+    PrintNotice(StringFormat("Start ExpertMartingale, symbol: %s", Symbol()));
 
     EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
     if (IS_INIT_OF_ENTRY_STRUCT) {
         ExpertMartingale::InitEntryStruct();
-        Print("[NOTICE] Entry構造体を初期化しました");
+        PrintNotice("Entry構造体を初期化しました");
     } else {
-        Print("[NOTICE] Entry初期化を初期化しませんでした");
+        PrintNotice("Entry初期化を初期化しませんでした");
     }
 
     if (IS_INIT_OF_TRADE_ANALYST_STRUCT) {
         ExpertMartingale::InitTradeAnalysisStruct();
-        Print("[NOTICE] TradeAnalyst構造体を初期化しました");
+        PrintNotice("TradeAnalyst構造体を初期化しました");
     } else {
-        Print("[NOTICE] TradeAnalyst初期化を初期化しませんでした");
+        PrintNotice("TradeAnalyst初期化を初期化しませんでした");
     }
     
-    
-
     myTrade.SetAsyncMode(false);
     myTrade.SetExpertMagicNumber(MAGIC_NUMBER);
     myTrade.SetTypeFilling(ORDER_FILLING_IOC);
@@ -470,7 +471,7 @@ void OnInit() {
 void OnTick() {
     if (!ExpertMartingale::MainLoop()) {
         ExpertMartingale::PrintTradeAnalysis();
-        PrintFormat("[ERROR] Exception Thrown, so Finished ExpertMartingale, symbol: %s", Symbol());
+        PrintError(StringFormat("Exception Thrown, so Finished ExpertMartingale, symbol: %s", Symbol()));
         ForceStopEa();
         return;
     }

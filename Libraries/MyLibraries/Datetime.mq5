@@ -67,7 +67,11 @@ datetime MinusMinutesForDatetime(datetime target_datetime, uint exchange_minutes
  * return: string YYYYmmdd
 **/
 string ConvertFormattedDate(datetime target_datetime) export {
-    return TimeToString(target_datetime, TIME_DATE | TIME_MINUTES);
+    MqlDateTime datetime_struct;
+    TimeToStruct(target_datetime, datetime_struct);
+    string formattedDate = StringFormat("%04d%02d%02d",
+    datetime_struct.year, datetime_struct.mon, datetime_struct.day);
+    return formattedDate;
 }
 
 /** datetime型を文字列に変換する
