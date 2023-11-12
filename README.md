@@ -9,3 +9,21 @@ pwd : `/Users/kyamasaki/MetaTrader5/MQL5`
 ただし、ファイル読み込み関数はFilesディレクトリのファイルしかattachできないため以下のようにシンボリックリンクを貼る
 
 `ln -s /Users/kyamasaki/MetaTrader5/MQL5/Logs /Users/kyamasaki/MetaTrader5/MQL5/Files/Logs`
+
+
+## EC2 Windowsインスタンス環境構築
+### インスタンス作成
+https://vps-ea.com/amazon-web-services/#toc6
+
+### MT5インストール
+https://www.xmtrading.com/jp/mt5
+
+### gitインストール
+https://prog-8.com/docs/git-env-win
+
+MQLプログラムのあるgitリポジトリをクローン
+
+### シンボリックリンク
+個人作成のMQLプログラムをシンボリックリンク作成
+
+`create-symlinks.bat`
