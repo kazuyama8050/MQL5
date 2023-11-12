@@ -6,3 +6,6 @@ Files/Logs
 *.ini
 Profiles/Charts/Default/*
 Profiles/Tester/*
+*.rdp
+*.pem
+.DS_Store

@@ -3,6 +3,7 @@
 #include <Arrays\ArrayDouble.mqh>
 #include <Arrays\List.mqh>
 #include <Trade\Trade.mqh>
+#include <Tools\DateTime.mqh>
 #include <MyInclude\MyTrade\MyTrade.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
 #include "include/ExpertMartingale.mqh"
@@ -26,6 +27,7 @@
     void PrintWarn(const string log_str);
     void PrintError(const string log_str);
     int SearchAndMailFromLog(datetime target_date, string expert_name, string sig, string title);
+    int DeleteOlderLogFile(datetime target_date);
 #import
 
 #import "MyLibraries/Datetime.ex5"
@@ -492,6 +494,7 @@ void OnTimer() {
     if (!SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), EXPERT_NAME, "SUMMARY", "サマリー_daily")) {
         PrintError("サマリー_dailyのメール送信失敗");
     }
+    DeleteOlderLogFile(MinusDayForDatetime(TimeLocal(), 30));
 }
 
 void OnDeinit() {

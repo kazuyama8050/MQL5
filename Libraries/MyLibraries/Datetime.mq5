@@ -20,10 +20,7 @@
  * return datetime
 **/
 datetime PlusDayForDatetime(datetime target_datetime, uint exchange_day) export {
-    MqlDateTime mql_current_datetime;
-    TimeToStruct(target_datetime, mql_current_datetime);
-    mql_current_datetime.day += int(exchange_day);  //現在からx日後
-    return StructToTime(mql_current_datetime);  //datetime型に変換
+    return target_datetime + (exchange_day * ONE_DATE_DATETIME);
 }
 
 /** x日前のdatetime型を返す
@@ -32,10 +29,7 @@ datetime PlusDayForDatetime(datetime target_datetime, uint exchange_day) export 
  * return datetime
 **/
 datetime MinusDayForDatetime(datetime target_datetime, uint exchange_day) export {
-    MqlDateTime mql_current_datetime;
-    TimeToStruct(target_datetime, mql_current_datetime);
-    mql_current_datetime.day -= int(exchange_day);  //現在からx日後
-    return StructToTime(mql_current_datetime);  //datetime型に変換
+    return target_datetime - (exchange_day * ONE_DATE_DATETIME);
 }
 
 /** x分後のdatetime型を返す
@@ -44,10 +38,7 @@ datetime MinusDayForDatetime(datetime target_datetime, uint exchange_day) export
  * return datetime
 **/
 datetime PlusMinutesForDatetime(datetime target_datetime, uint exchange_minutes) export {
-    MqlDateTime mql_current_datetime;
-    TimeToStruct(target_datetime, mql_current_datetime);
-    mql_current_datetime.min += int(exchange_minutes);  //現在からx分後
-    return StructToTime(mql_current_datetime);  //datetime型に変換
+    return target_datetime + (exchange_minutes * ONE_MINUTE_DATETIME);
 }
 
 /** x分前のdatetime型を返す
@@ -56,10 +47,26 @@ datetime PlusMinutesForDatetime(datetime target_datetime, uint exchange_minutes)
  * return datetime
 **/
 datetime MinusMinutesForDatetime(datetime target_datetime, uint exchange_minutes) export {
+    return target_datetime - (exchange_minutes * ONE_MINUTE_DATETIME);
+}
+
+/** datetime型をCDateTimeに変換する 
+ * args1: 変換前datetime
+ * args2: CDateTimeへのポインタ
+**/
+int DatetimeToCDatetime(datetime target_datetime, CDateTime &cDatetime) export {
     MqlDateTime mql_current_datetime;
     TimeToStruct(target_datetime, mql_current_datetime);
-    mql_current_datetime.min -= int(exchange_minutes);  //現在からx分前
-    return StructToTime(mql_current_datetime);  //datetime型に変換
+
+    cDatetime.Sec(mql_current_datetime.sec);
+    cDatetime.Min(mql_current_datetime.min);
+    cDatetime.Hour(mql_current_datetime.hour);
+    cDatetime.Day(mql_current_datetime.day);
+    cDatetime.Mon(mql_current_datetime.mon);
+    cDatetime.Year(mql_current_datetime.year);
+    ZeroMemory(mql_current_datetime);
+
+    return 1;
 }
 
 /** datetime型をYYYYmmddに変換する

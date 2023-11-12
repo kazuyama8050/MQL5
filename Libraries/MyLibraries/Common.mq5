@@ -152,6 +152,37 @@ int SearchAndMailFromLog(datetime target_date, string expert_name, string sig, s
         return 0;
     }
     return 1;
+}
 
+/** 指定日より古いログファイルを削除する
+ * arg1: 指定日
+**/
+int DeleteOlderLogFile(datetime target_date) export {
+    string target_date_str = ConvertFormattedDate(target_date);
+    ushort dot = StringGetCharacter(".", 0);
+    string filename;
+    long search_handle=FileFindFirst("Logs/*.log",filename);
+    if (search_handle == INVALID_HANDLE) {
+        return 0;
+    }
 
+    do
+       {
+            ResetLastError();
+            string filename_seg[];
+            int line_seg_num = StringSplit(filename, dot, filename_seg);
+            if (line_seg_num != 2) {
+                continue;
+            }
+            string date_yyyymmdd = filename_seg[0];
+            if(date_yyyymmdd < target_date_str) {
+                string filepath = StringFormat("Logs/%s", filename);
+                FileDelete(filepath);
+                PrintNotice(StringFormat("%s file deleted!", filepath));
+            }
+       }
+    while(FileFindNext(search_handle,filename));
+    FileFindClose(search_handle);
+
+    return 1;
 }
