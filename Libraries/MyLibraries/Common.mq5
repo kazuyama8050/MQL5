@@ -142,6 +142,7 @@ int SearchAndMailFromLog(datetime target_date, string expert_name, string sig, s
         string log_str = StringFormat("%s\n%s", datetime_format, print_str);
         mail_body = StringFormat("%s\n\n%s", mail_body, log_str);
     }
+    FileClose(filehandle);
     if (mail_body == "") return 1;
 
     string mail_title = StringFormat("%s_%s", title, target_date_str);
