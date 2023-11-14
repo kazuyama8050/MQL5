@@ -470,6 +470,10 @@ void OnInit() {
     } else {
         PrintNotice("TradeAnalyst初期化を初期化しませんでした");
     }
+
+    if (IS_FORCE_STOPPED) {
+        PrintNotice("ポジションがなくなり次第強制終了します。");
+    }
     
     myTrade.SetAsyncMode(false);
     myTrade.SetExpertMagicNumber(MAGIC_NUMBER);
