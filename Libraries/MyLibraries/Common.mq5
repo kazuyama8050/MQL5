@@ -30,6 +30,10 @@ void ForceStopEa() export {
 /**
  * ログ出力
 **/
+void PrintDebug(const string log_str) export {
+    PrintFormat("[DEBUG] %s", log_str);
+}
+
 void PrintNotice(const string log_str) export {
     PrintFormat("[NOTICE] %s", log_str);
 }

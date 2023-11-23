@@ -23,6 +23,7 @@
 #import
 #import "MyLibraries/Common.ex5"
     void ForceStopEa();
+    void PrintDebug(const string log_str);
     void PrintNotice(const string log_str);
     void PrintWarn(const string log_str);
     void PrintError(const string log_str);
@@ -295,6 +296,7 @@ int ExpertMartingale::ClearLot() {
             continue;
         }
 
+        // トータル利益より損失額が大きい場合は最小限の利益が出る範囲で既存損失ポジションを部分決済
         int divide_volume_cnt = (int)(position_volume / INITIAL_VOLUME);  // 最小ロット数で分割できる数
         double divide_position_profit = position_profit / divide_volume_cnt;  // 最小ロット分の損失
         double settlement_volume = (int)(total_benefit / MathAbs(divide_position_profit)) * INITIAL_VOLUME;  // ポジション整理対象ロット数
@@ -304,12 +306,12 @@ int ExpertMartingale::ClearLot() {
 
         if (settlement_volume < INITIAL_VOLUME) continue;
 
-        string comment = StringFormat("[ポジション調整]損失分、チケット=%d / %f", position_ticket, settlement_volume);
+        string comment = StringFormat("[ポジション調整]損失分、チケット=%d, %f/%f", position_ticket, settlement_volume, position_volume);
         myTrade.PositionClose(position_ticket, ULONG_MAX, settlement_volume, comment);
         int order_retcode = ExpertMartingale::OrderRetcode(false);
         if (order_retcode == 0) {
             ExpertMartingale::trade_analysis_struct.order_error_cnt += 1;
-            PrintError(StringFormat("ポジション調整失敗（損失）, チケット=%d / %f", position_ticket, settlement_volume));
+            PrintError(StringFormat("ポジション調整失敗（損失）, チケット=%d, %f/%f", position_ticket, settlement_volume, position_volume));
             return 0;
         }
 
