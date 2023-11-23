@@ -33,7 +33,7 @@ class ExpertMartingale {
         static void ExpertMartingale::PrintTradeAnalysis();
         static int ExpertMartingale::MainLoop();
         static int ExpertMartingale::TradeOrder(bool isNextBuying);
-        static int ExpertMartingale::OrderRetcode(bool is_open);
+        static int ExpertMartingale::OrderRetcode(bool is_open, bool all_settlement_flag = false);
         static int ExpertMartingale::CalcSegPoint(double latest_price);
         static double ExpertMartingale::CalcRevenue(int seg_point);
         static double ExpertMartingale::CalcRevenueByProfitOrLoss(int seg_point, bool is_benefit_flag);
