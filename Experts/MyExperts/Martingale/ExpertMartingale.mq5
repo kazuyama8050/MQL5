@@ -114,10 +114,10 @@ int ExpertMartingale::MainLoop() {
     bool is_next_buying = ExpertMartingale::entry_struct.buying_num == ExpertMartingale::entry_struct.selling_num;
     int trade_cnt = ExpertMartingale::entry_struct.buying_num + ExpertMartingale::entry_struct.selling_num;
 
-    // トレード実績がなく、強制停止シグナルがある場合は終了
+    // 保有ポジションがなく、強制停止シグナルがある場合は終了
     if (trade_cnt == 0 && IS_FORCE_STOPPED) {
         ExpertMartingale::SettlementAllPosition();
-        PrintNotice("強制終了シグナルを受け取ったため全決済");
+        PrintNotice("強制終了シグナルを受け取り、ポジションなしのため全決済");
         ExpertMartingale::PrintTradeAnalysis();
         PrintNotice(StringFormat("Force Stopped Flag Thrown, so Finished ExpertMartingale, symbol: %s", Symbol()));
         ForceStopEa();
