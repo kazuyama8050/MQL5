@@ -6,6 +6,7 @@
 #include <Tools\DateTime.mqh>
 #include <MyInclude\MyTrade\MyTrade.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
+#include <MyInclude\MyTechnical\MyMovingAverage\MyMovingAverage.mqh>
 #include "include/ExpertMartingale.mqh"
 
 #import "MyLibraries/Trade.ex5"
@@ -33,14 +34,20 @@
 
 #import "MyLibraries/Datetime.ex5"
     datetime MinusDayForDatetime(datetime target_datetime, uint exchange_day);
+    datetime MinusMinutesForDatetime(datetime target_datetime, uint exchange_minutes);
     int GetDayOfWeekFromDatetime(datetime target_datetime);
 #import
 
-input group "ロジック閾値"
+input group "マーチンゲールロジック閾値"
 input double MARTIGALE_PIPS = 0.2;
 input int MARTINGALE_MAX_COUNT = 4;
 input double INITIAL_VOLUME = 0.01;
 input int LONG_TRADE_PROFIT_POINT = 100000;
+
+input group "移動平均ロジック"
+input int MA_PERIOD = 25;
+input ENUM_MA_METHOD MA_METHOD = MODE_SMA;
+input int MA_COMPARISON_RANGE = 3;
 
 input group "初期化ハンドル"
 input bool IS_INIT_OF_ENTRY_STRUCT = false;
@@ -401,7 +408,22 @@ int ExpertMartingale::SettlementAllPosition() {
  * return int 買い: 1 売り: -1 それ以外: 0
 **/
 int ExpertMartingale::CalcFirstTradeTrend() {
-    return 1;
+    CMyMovingAverage myMovingAverage();
+    if (!myMovingAverage.Init(Symbol(), PERIOD_M15, MA_PERIOD, 0, MA_METHOD, PRICE_CLOSE)) {
+        PrintWarn("Failed Init IMA Handle");
+        return IS_BUYING;
+    }
+    if (!myMovingAverage.SetMaByPosition(0, 0, MA_COMPARISON_RANGE)) {
+        PrintWarn("Failed Get IMA Datas");
+        return IS_BUYING;
+    }
+
+    double latest_ma_data = myMovingAverage.GetImaData(0);
+    double oldest_ma_data = myMovingAverage.GetImaData(MA_COMPARISON_RANGE-1);
+    if (latest_ma_data >= oldest_ma_data) {
+        return IS_BUYING;
+    }
+    return IS_SELLING;
 }
 
 double ExpertMartingale::CalcVolumeByTradeCount(int trade_num) {
@@ -532,6 +554,7 @@ void OnInit() {
     myTrade.SetAsyncMode(false);
     myTrade.SetExpertMagicNumber(MAGIC_NUMBER);
     myTrade.SetTypeFilling(ORDER_FILLING_IOC);
+    Print(ExpertMartingale::CalcFirstTradeTrend());
 }
 
 void OnTick() {
