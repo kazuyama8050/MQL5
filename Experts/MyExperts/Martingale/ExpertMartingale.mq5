@@ -365,7 +365,8 @@ int ExpertMartingale::SettlementAllPosition() {
             if (!PositionSelect(Symbol())) continue;// 対象シンボルのポジションをチケット番号が最も古いものを取得する
             ulong position_ticket = PositionGetInteger(POSITION_TICKET);
             if (position_ticket == 0) continue;
-            if (!myTrade.PositionClose(position_ticket, ULONG_MAX, "全決済")) {
+            string comment = StringFormat("全決済: ポジション: %d", position_ticket);
+            if (!myTrade.PositionClose(position_ticket, ULONG_MAX, comment)) {
                 
                 continue;
             }
