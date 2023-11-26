@@ -6,6 +6,8 @@
 #include <Tools\DateTime.mqh>
 #include <MyInclude\MyTrade\MyTrade.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
+#include <MyInclude\MyAccount\MyAccountInfo.mqh>
+#include <MyInclude\MyFile\MyLogHandler.mqh>
 #include <MyInclude\MyTechnical\MyMovingAverage\MyMovingAverage.mqh>
 #include "include/ExpertMartingale.mqh"
 
@@ -28,8 +30,6 @@
     void PrintNotice(const string log_str);
     void PrintWarn(const string log_str);
     void PrintError(const string log_str);
-    int SearchAndMailFromLog(datetime target_date, string expert_name, string sig, string title);
-    int DeleteOlderLogFile(datetime target_date);
 #import
 
 #import "MyLibraries/Datetime.ex5"
@@ -62,7 +62,12 @@ static EntryStruct ExpertMartingale::entry_struct;
 static TradeAnalysisStruct ExpertMartingale::trade_analysis_struct;
 
 CMyTrade myTrade;
-
+CMyAccountInfo myAccountInfo;
+MyLogHandler myLogHandler(
+    "ExpertMartingale",
+    myAccountInfo.TradeModeDescription(),
+    myAccountInfo.Name()
+);
 
 int ExpertMartingale::TradeOrder(int next_trade_flag) {
     int trade_cnt = ExpertMartingale::entry_struct.buying_num + ExpertMartingale::entry_struct.selling_num;
@@ -71,8 +76,8 @@ int ExpertMartingale::TradeOrder(int next_trade_flag) {
     if (next_trade_flag == IS_BUYING) {
         trade_comment = "買い";
     }
-    ENUM_ORDER_TYPE order_type;
-    double price;
+    ENUM_ORDER_TYPE order_type = ORDER_TYPE_BUY;;
+    double price = 0.0;
     if (next_trade_flag == IS_BUYING) {  // 買い注文
         order_type = ORDER_TYPE_BUY;
         price = SymbolInfoDouble(Symbol(),SYMBOL_ASK);
@@ -554,7 +559,6 @@ void OnInit() {
     myTrade.SetAsyncMode(false);
     myTrade.SetExpertMagicNumber(MAGIC_NUMBER);
     myTrade.SetTypeFilling(ORDER_FILLING_IOC);
-    Print(ExpertMartingale::CalcFirstTradeTrend());
 }
 
 void OnTick() {
@@ -569,13 +573,13 @@ void OnTick() {
 
 void OnTimer() {
     ExpertMartingale::PrintTradeAnalysis();
-    if (!SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), EXPERT_NAME, "ERROR,WARN", "バグ検知_daily")) {
+    if (!myLogHandler.SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), "ERROR,WARN", "バグ検知_daily")) {
         PrintError("バグ検知_dailyのメール送信失敗");
     }
-    if (!SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), EXPERT_NAME, "SUMMARY", "サマリー_daily")) {
+    if (!myLogHandler.SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), "SUMMARY", "サマリー_daily")) {
         PrintError("サマリー_dailyのメール送信失敗");
     }
-    DeleteOlderLogFile(MinusDayForDatetime(TimeLocal(), 30));
+    myLogHandler.DeleteOlderLogFile(MinusDayForDatetime(TimeLocal(), 30));
 }
 
 void OnDeinit() {
