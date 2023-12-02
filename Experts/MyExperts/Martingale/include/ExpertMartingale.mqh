@@ -22,7 +22,8 @@ struct TradeAnalysisStruct
     int order_error_cnt;  // トレードリクエストエラー回数
     int all_settlement_order_error_cnt;  // 全決済リクエストエラー回数
     int martingale_trade_cnt;  // 両建てマーチンゲール手法によるトレード回数
-    double trade_max_volume;
+    int first_trade_benefit_cnt;  // 初回トレードで勝った回数
+    double trade_max_volume;  // 最大ロット数履歴
     CArrayDouble all_settlement_profit_list;  // 全決済時トータル損益履歴配列
     CArrayDouble clear_lot_profit_list;  // ポジション調整時トータル損益履歴配列（調整後との調整金額）
     CArrayDouble clear_lot_benefit_list;  // ポジション調整時トータル損益履歴配列（利益分）
@@ -66,10 +67,12 @@ class ExpertMartingale {
         static bool ExpertMartingale::HasInitTradeFlag() { return ExpertMartingale::entry_struct.init_trade_flag != 0; }
 
         static double ExpertMartingale::GetTradeMaxVolume() { return ExpertMartingale::trade_analysis_struct.trade_max_volume; }
+        static int ExpertMartingale::GetFirstTradeBenefitCount() { return ExpertMartingale::trade_analysis_struct.first_trade_benefit_cnt; }
 
         static void ExpertMartingale::PlusOrderErrorCount() { ExpertMartingale::trade_analysis_struct.order_error_cnt += 1; }
         static void ExpertMartingale::PlusAllSettlementOrderErrorCount() { ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt += 1; }
         static void ExpertMartingale::PlusMartingaleTradeCount() { ExpertMartingale::trade_analysis_struct.martingale_trade_cnt += 1; }
+        static void ExpertMartingale::PlusFirstTradeBenefitCount() { ExpertMartingale::trade_analysis_struct.first_trade_benefit_cnt += 1; }
         static void ExpertMartingale::SetTradeMaxVolume(double trade_max_volume) { ExpertMartingale::trade_analysis_struct.trade_max_volume = trade_max_volume; }
         static void ExpertMartingale::AddAllSettlementProfitList(double all_settlement_profit) { ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Add(all_settlement_profit); }
         static void ExpertMartingale::AddClearLotProfitList(double clear_lot_profit) { ExpertMartingale::trade_analysis_struct.clear_lot_profit_list.Add(clear_lot_profit); }
@@ -103,7 +106,13 @@ void ExpertMartingale::PrintTradeAnalysis() {
     Print(StringFormat("[SUMMARY] 全決済リクエストの失敗回数=%d", ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt));
 
     int all_settlement_cnt = ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Total();
-    PrintFormat("[SUMMARY] 両建てマーチンゲール手法による取引回数: %d, 決済回数: %d, 最大トレードロット数: %f", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt, all_settlement_cnt, ExpertMartingale::trade_analysis_struct.trade_max_volume);
+    PrintFormat(
+        "[SUMMARY] 両建てマーチンゲール手法による取引回数: %d, 決済回数: %d, 初回トレード勝ち数: %d 最大トレードロット数: %f",
+        ExpertMartingale::trade_analysis_struct.martingale_trade_cnt,
+        all_settlement_cnt,
+        ExpertMartingale::GetFirstTradeBenefitCount(),
+        ExpertMartingale::trade_analysis_struct.trade_max_volume
+    );
 
     int all_settlement_benefit_cnt = 0;
     double all_settlement_total_benefit = 0.0;

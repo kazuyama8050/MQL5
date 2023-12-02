@@ -7,6 +7,7 @@ class CMyAccountInfo : public CAccountInfo
         string TradeModeDescription(void) const;
         string StopoutModeDescription(void) const;
         string MarginModeDescription(void) const;
+        bool CMyAccountInfo::IsMarginLevelSafe(int ratio) const;
 };
 
 string CMyAccountInfo::TradeModeDescription(void) const
@@ -39,4 +40,12 @@ string CMyAccountInfo::MarginModeDescription(void) const
         default : return "不明な証拠金計算モード";
     }
     return "不明な証拠金計算モード";
+}
+
+/** 証拠金維持率チェック
+ * @var マージンコール設定値にかける倍率
+**/
+bool CMyAccountInfo::IsMarginLevelSafe(int ratio) const
+{
+    return MarginLevel() <= MarginCall() * ratio;
 }

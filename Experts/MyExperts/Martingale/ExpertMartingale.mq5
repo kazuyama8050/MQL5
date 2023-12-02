@@ -5,6 +5,7 @@
 #include <Trade\Trade.mqh>
 #include <Tools\DateTime.mqh>
 #include <MyInclude\MyTrade\MyTrade.mqh>
+#include <MyInclude\MyTrade\MySymbolInfo.mqh>
 #include <MyInclude\MyCommon\MyDatetime.mqh>
 #include <MyInclude\MyAccount\MyAccountInfo.mqh>
 #include <MyInclude\MyFile\MyLogHandler.mqh>
@@ -49,6 +50,9 @@ input int MA_PERIOD = 25;
 input ENUM_MA_METHOD MA_METHOD = MODE_SMA;
 input int MA_COMPARISON_RANGE = 3;
 
+input group "証拠金"
+input int MARGIN_SAFE_LEVEL_RATIO = 2;
+
 input group "初期化ハンドル"
 input bool IS_INIT_OF_ENTRY_STRUCT = false;
 input bool IS_INIT_OF_TRADE_ANALYST_STRUCT = false;
@@ -62,6 +66,7 @@ static EntryStruct ExpertMartingale::entry_struct;
 static TradeAnalysisStruct ExpertMartingale::trade_analysis_struct;
 
 CMyTrade myTrade;
+CMySymbolInfo mySymbolInfo;
 CMyAccountInfo myAccountInfo;
 MyLogHandler myLogHandler(
     "ExpertMartingale",
@@ -367,7 +372,6 @@ int ExpertMartingale::SettlementAllPosition() {
             if (position_ticket == 0) continue;
             string comment = StringFormat("全決済: ポジション: %d", position_ticket);
             if (!myTrade.PositionClose(position_ticket, ULONG_MAX, comment)) {
-                
                 continue;
             }
 
@@ -402,6 +406,10 @@ int ExpertMartingale::SettlementAllPosition() {
     
     if (total_revenue < 0) {
         PrintWarn(StringFormat("損失発生、損益=%f", total_revenue));
+    }
+
+    if (ret_cnt == 1) {
+        ExpertMartingale::PlusFirstTradeBenefitCount();
     }
     ExpertMartingale::AddAllSettlementProfitList(total_revenue);
 
@@ -531,7 +539,7 @@ int ExpertMartingale::GetNextTradeFlag() {
             return IS_BUYING;
         }
     }
-    PrintError("Maybe Logic Bug By Calc IsNextBuying");
+    PrintError("Maybe Logic Bug By Calc GetNextTradeFlag");
     return IS_BUYING;
 }
 
@@ -560,6 +568,18 @@ void OnInit() {
     myTrade.SetAsyncMode(false);
     myTrade.SetExpertMagicNumber(MAGIC_NUMBER);
     myTrade.SetTypeFilling(ORDER_FILLING_IOC);
+
+    if (!mySymbolInfo.Refresh()) {
+        PrintError("Cannot Refresh Cached Data of SymbolInfo");
+        ForceStopEa();
+        return;
+    }
+
+    if (!mySymbolInfo.IsValidMinVolume(INITIAL_VOLUME)) {
+        PrintError(StringFormat("Initial Volume is too Low than %f", mySymbolInfo.LotsMin()));
+        ForceStopEa();
+        return;
+    }
 }
 
 void OnTick() {
@@ -573,6 +593,14 @@ void OnTick() {
 }
 
 void OnTimer() {
+    if (myAccountInfo.IsMarginLevelSafe(MARGIN_SAFE_LEVEL_RATIO) == false) {
+        PrintWarn(StringFormat("証拠金維持率に余裕がありません。 証拠金維持率: %f", myAccountInfo.MarginLevel()));
+    }
+
+    if (!mySymbolInfo.Refresh()) {
+        PrintWarn("Cannot Refresh Cached Data of SymbolInfo");
+    }
+
     ExpertMartingale::PrintTradeAnalysis();
     if (!myLogHandler.SearchAndMailFromLog(MinusDayForDatetime(TimeLocal(), 1), "ERROR,WARN", "バグ検知_daily")) {
         PrintError("バグ検知_dailyのメール送信失敗");
