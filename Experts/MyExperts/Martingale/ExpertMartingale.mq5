@@ -13,16 +13,12 @@
 #include "include/ExpertMartingale.mqh"
 
 #import "MyLibraries/Trade.ex5"
-    bool TradeOrder(MqlTradeRequest &trade_request, MqlTradeResult &order_response);
-    double GetTotalSettlementProfit();
-    double GetAllPositionProfit();
+    int GetPositionNumByTargetEa(string symbol, long magic_number);
+    double GetAllPositionProfitByTargetEa(string symbol, long magic_number);
     double GetSettlementProfit(ulong deal_ticket);
-    int GetTotalSettlementProfitList(CArrayDouble &profit_list);
-    bool SettlementTrade(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, string comment);
-    bool SettlementTradeByVolume(MqlTradeRequest &settlement_request, MqlTradeResult &settlement_response, ulong position_ticket, double volume, string comment);
+    double GetTotalSettlementProfitByTargetEa(string symbol, long magic_number);
 #import
 #import "MyLibraries/Indicator.ex5"
-    int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
 #import
 #import "MyLibraries/Common.ex5"
@@ -40,7 +36,7 @@
 #import
 
 input group "マーチンゲールロジック閾値"
-input double MARTIGALE_PIPS = 0.2;
+input double MARTINGALE_PIPS = 0.2;
 input int MARTINGALE_MAX_COUNT = 4;
 input double INITIAL_VOLUME = 0.01;
 input int LONG_TRADE_PROFIT_POINT = 100000;
@@ -54,7 +50,7 @@ input group "証拠金"
 input int MARGIN_SAFE_LEVEL_RATIO = 2;
 
 input group "初期化ハンドル"
-input bool IS_INIT_OF_ENTRY_STRUCT = false;
+input bool IS_INIT_OF_POSITIONS_STRUCT = false;
 input bool IS_INIT_OF_TRADE_ANALYST_STRUCT = false;
 
 input group "外部シグナル"
@@ -62,8 +58,9 @@ input bool IS_FORCE_STOPPED = false;
 
 string EXPERT_NAME = "ExpertMartingale";
 
-static EntryStruct ExpertMartingale::entry_struct;
 static TradeAnalysisStruct ExpertMartingale::trade_analysis_struct;
+static PositionsStruct ExpertMartingale::positions_struct;
+static long ExpertMartingale::magic_number;
 
 CMyTrade myTrade;
 CMySymbolInfo mySymbolInfo;
@@ -74,9 +71,13 @@ MyLogHandler myLogHandler(
     myAccountInfo.Name()
 );
 
+
+
 int ExpertMartingale::TradeOrder(int next_trade_flag) {
-    int trade_cnt = ExpertMartingale::entry_struct.buying_num + ExpertMartingale::entry_struct.selling_num;
-    const double volume = ExpertMartingale::CalcVolumeByTradeCount(trade_cnt + 1);
+    double volume = ExpertMartingale::GetMaxPositionVolume() * 2;
+    if (volume == 0.0) {
+        volume = INITIAL_VOLUME;
+    }
     string trade_comment = "売り";
     if (next_trade_flag == IS_BUYING) {
         trade_comment = "買い";
@@ -90,7 +91,7 @@ int ExpertMartingale::TradeOrder(int next_trade_flag) {
         order_type = ORDER_TYPE_SELL;
         price = SymbolInfoDouble(Symbol(),SYMBOL_BID);
     }
-    const string comment = StringFormat("[%d回目]%s : %f * %f", ExpertMartingale::trade_analysis_struct.martingale_trade_cnt+1, trade_comment, volume, price);
+    const string comment = StringFormat("[%d回目]%s : %.2f * %.3f", ExpertMartingale::GetTradeNum()+1, trade_comment, volume, price);
 
     if (!myTrade.PositionOpen(Symbol(), order_type, volume, price, 0, 0, comment)) {
         return 0;
@@ -126,8 +127,20 @@ int ExpertMartingale::MainLoop() {
         PrintError(StringFormat("ロジックバグ : ロング、ショートで交互にトレードされていない可能性あり, buying_num: %d, selling_num: %d", ExpertMartingale::GetBuyingNum(), ExpertMartingale::GetSellingNum()));
         return 0;
     }
+
+    if (ExpertMartingale::GetTradeNum() != ExpertMartingale::GetPositionSize()) {
+        PrintError(StringFormat("ロジックバグ : トレード記録が不正, recorded_trade_cnt: %d, real_trade_cnt: %d", ExpertMartingale::GetTradeNum(), ExpertMartingale::GetPositionSize()));
+        return 0;
+    }
+
+    if (ExpertMartingale::GetPositionNum() > 0 && ExpertMartingale::GetInitTradeFlag() == IS_NOTRADE) {
+        PrintError(StringFormat("ロジックバグ : 初回トレード記録が不正, position_num: %d", ExpertMartingale::GetPositionNum()));
+        return 0;
+    }
+
     CArrayDouble price_15_list;
     GetClosePriceList(price_15_list, Symbol(), PERIOD_M15, 10);
+    double now_price = price_15_list[0];
 
     int next_trade_flag = ExpertMartingale::GetNextTradeFlag();
     if (next_trade_flag != IS_BUYING && next_trade_flag != IS_SELLING) {
@@ -135,13 +148,15 @@ int ExpertMartingale::MainLoop() {
         return 0;
     }
 
+    int position_cnt = ExpertMartingale::GetPositionNum();
     int trade_cnt = ExpertMartingale::GetTradeNum();
-    if (trade_cnt > 0 && ExpertMartingale::HasInitTradeFlag() == false) {
-        PrintError(StringFormat("ロジックバグ : ポジション保有済みだが初期トレードフラグが未定義, trade_cnt: %d, init_trade_flag: %d", trade_cnt, ExpertMartingale::GetInitTradeFlag()));
+    if (position_cnt > 0 && ExpertMartingale::HasInitTradeFlag() == false) {
+        PrintError(StringFormat("ロジックバグ : ポジション保有済みだが初期トレードフラグが未定義, position_cnt: %d, init_trade_flag: %d", position_cnt, ExpertMartingale::GetInitTradeFlag()));
     }
 
+
     // 保有ポジションがなく、強制停止シグナルがある場合は終了
-    if (trade_cnt == 0 && IS_FORCE_STOPPED) {
+    if (position_cnt == 0 && IS_FORCE_STOPPED) {
         ExpertMartingale::SettlementAllPosition();
         PrintNotice("強制終了シグナルを受け取り、ポジションなしのため全決済");
         ExpertMartingale::PrintTradeAnalysis();
@@ -151,7 +166,7 @@ int ExpertMartingale::MainLoop() {
     }
 
     // トレード実績がない場合はとりあえず買いトレード
-    if (trade_cnt == 0) {
+    if (position_cnt == 0) {
         // 注文
         ExpertMartingale::TradeOrder(next_trade_flag);
         int order_retcode = ExpertMartingale::OrderRetcode(true);
@@ -160,67 +175,70 @@ int ExpertMartingale::MainLoop() {
         }
         if (order_retcode == 2) return 1;  // 市場閉鎖によりスキップ
 
-        ExpertMartingale::SetInitTradeFlag(next_trade_flag);  // 初回トレードフラグ設定
         if (next_trade_flag == IS_BUYING) {
             ExpertMartingale::PlusBuyingNum();
         } else {
             ExpertMartingale::PlusSellingNum();
         }
-        
-        ExpertMartingale::SetBasePoint(0);  //初回トレード価格を基準とする
-        ExpertMartingale::SetInitPrice(myTrade.ResultPrice());  // 初回トレード価格
+        ExpertMartingale::PlusPositionNum();
+
+        PositionStruct position_struct;
+        ExpertMartingale::SetPositionStruct(
+            position_struct,
+            myTrade.ResultOrder(),
+            next_trade_flag,
+            myTrade.ResultPrice(),
+            myTrade.ResultVolume()
+        );
+        ExpertMartingale::AddPosition(position_struct);
         ExpertMartingale::PlusMartingaleTradeCount();
-        ExpertMartingale::SetLatestPositionTradeDatetime(TimeLocal());
         return 1;
     }
 
-    int seg_point = ExpertMartingale::CalcSegPoint(price_15_list[0]);  // 現在のセグポイント
-    bool is_revenue = ExpertMartingale::CalcRevenue(seg_point) >= INITIAL_VOLUME;
-
-    // セグポイントでの計算上、トータルで利益が出ていれば全決済
-    if (is_revenue) {
+    // pips単位で利益が出ていれば全決済
+    if (ExpertMartingale::IsRevenueBySegCalc(now_price)) {
         if (ExpertMartingale::SettlementAllPosition() == 0) {
             PrintError("全決済異常エラーのため異常終了");
             return 0;
         }
-        if (PositionsTotal() > 0) {
-            PrintWarn(StringFormat("全決済後にポジションが残っている, total=%d", PositionsTotal()));
+        if (GetPositionNumByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber()) > 0) {
+            PrintWarn(StringFormat("全決済後にポジションが残っている, total=%d", GetPositionNumByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber())));
         }
-        ExpertMartingale::InitEntryStruct();
+        ExpertMartingale::InitPositionsStruct();
         return 1;
     }
 
-    int next_seg_point = ExpertMartingale::CalcNextTradeSegPoint();  // 次のトレードのセグポイント
-    if ((next_trade_flag == IS_BUYING && next_seg_point <= 0) ||
-        (next_trade_flag == IS_SELLING && next_seg_point >= 0))
+    double next_seg_price = ExpertMartingale::CalcNextTradeSegPrice();  // 次のトレードの基準価格
+    if ((next_trade_flag == IS_BUYING && next_seg_price <= ExpertMartingale::GetInitPrice()) ||
+        (next_trade_flag == IS_SELLING && next_seg_price >= ExpertMartingale::GetInitPrice()))
     {
-        PrintError("セグポイント計算にバグの可能性があるため終了");
+        PrintError(StringFormat("セグポイント計算にバグの可能性があるため終了. next_trade_flag: %d, next_seg_price: %.3f", next_trade_flag, next_seg_price));
         return 0;
     }
 
     // 連続トレードが指定回数+1を超える && 最新ポジショントレード日時が1日以前 && 利益が初期ボリューム*LONG_TRADE_PROFIT_POINTの場合、全決済
     if (trade_cnt >= MARTINGALE_MAX_COUNT + 1 && 
         ExpertMartingale::GetLatestPositionTradeDatetime() < TimeLocal() - ONE_DATE_DATETIME && 
-        GetAllPositionProfit() > INITIAL_VOLUME * LONG_TRADE_PROFIT_POINT
+        GetAllPositionProfitByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber()) > INITIAL_VOLUME * LONG_TRADE_PROFIT_POINT
     ) {
         PrintNotice("ロット数多、1日以上経過、利益が出ているため全決済");
         if (ExpertMartingale::SettlementAllPosition() == 0) {
             PrintError("全決済異常エラーのため異常終了");
             return 0;
         }
-        if (PositionsTotal() > 0) {
-            PrintError(StringFormat("全決済後にポジションが残っている, total=%d", PositionsTotal()));
+        if (GetPositionNumByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber()) > 0) {
+            PrintError(StringFormat("全決済後にポジションが残っている, total=%d", GetPositionNumByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber())));
             return 0;
         }
-        ExpertMartingale::InitEntryStruct();
+        ExpertMartingale::InitPositionsStruct();
         return 1;
     }
 
-    // 次が買いトレードの場合は、現在のセグメントが次トレードのセグメント以上
-    // 次が売りトレードの場合は、現在のセグメントが次トレードのセグメント以下
+    // 次が買いトレードの場合は、現在のレートが次トレードのレート以上
+    // 次が売りトレードの場合は、現在のレートが次トレードのレート以下
     // 上記いずれかを満たす場合、注文
-    if ((next_trade_flag == IS_BUYING && seg_point >= next_seg_point) || 
-        (next_trade_flag == IS_SELLING && seg_point <= next_seg_point))
+    if ((next_trade_flag == IS_BUYING && now_price >= next_seg_price) || 
+        (next_trade_flag == IS_SELLING && now_price <= next_seg_price))
     {
         // 連続トレードが指定回数を超えるとロット数を調整する
         if (trade_cnt >= MARTINGALE_MAX_COUNT) {
@@ -245,26 +263,35 @@ int ExpertMartingale::MainLoop() {
         } else {
             ExpertMartingale::PlusSellingNum();
         }
-        
-        ExpertMartingale::SetBasePoint(next_seg_point);  // これは必要か？
+        ExpertMartingale::PlusPositionNum();
+
+        PositionStruct position_struct;
+        ExpertMartingale::SetPositionStruct(
+            position_struct,
+            myTrade.ResultOrder(),
+            next_trade_flag,
+            myTrade.ResultPrice(),
+            myTrade.ResultVolume()
+        );
+        ExpertMartingale::AddPosition(position_struct);
         ExpertMartingale::PlusMartingaleTradeCount();
-        ExpertMartingale::SetLatestPositionTradeDatetime(TimeLocal());
         return 1;
     }
 
     return 1;
 }
 
-/**　ポジション整理
- * 
-**/
 int ExpertMartingale::ClearLot() {
-    // 利益分のポジション調整
-    int total_position = PositionsTotal();
+    if (ExpertMartingale::GetPositionNum() == 0) return 1;
     double total_benefit = 0.0;
-    for (int i = 0; i < total_position; i++) {
-        ulong  position_ticket = PositionGetTicket(i);
-        PositionSelectByTicket(position_ticket);
+
+    for (int i = 0;i < ExpertMartingale::GetPositionSize(); i++) {
+        if (ExpertMartingale::GetPositionIsValidByKey(i) == false) continue;
+        ulong  position_ticket = ExpertMartingale::GetPositionTicketByKey(i);
+        if (!PositionSelectByTicket(position_ticket)) {
+            PrintWarn(StringFormat("ポジション情報取得失敗, チケット=%d", position_ticket));
+            continue;
+        }
         double position_volume = PositionGetDouble(POSITION_VOLUME);
         double position_profit = PositionGetDouble(POSITION_PROFIT);
 
@@ -282,6 +309,9 @@ int ExpertMartingale::ClearLot() {
 
             if (order_retcode == 2) continue;  // 市場閉鎖によりスキップ
 
+            ExpertMartingale::MinusPositionNum();
+            ExpertMartingale::ConvertInvalidPosition(i);
+
             double deal_profit = GetSettlementProfit(myTrade.ResultDeal());
             total_benefit += deal_profit;
             ExpertMartingale::AddClearLotBenefitList(deal_profit);
@@ -290,10 +320,13 @@ int ExpertMartingale::ClearLot() {
     }
 
     // 損失分のポジション調整
-    total_position = PositionsTotal();
-    for (int i = 0; i < total_position; i++) {
-        ulong  position_ticket = PositionGetTicket(i);
-        PositionSelectByTicket(position_ticket);
+    for (int i = 0;i < ExpertMartingale::GetPositionSize(); i++) {
+        if (ExpertMartingale::GetPositionIsValidByKey(i) == false) continue;
+        ulong  position_ticket = ExpertMartingale::GetPositionTicketByKey(i);
+        if (!PositionSelectByTicket(position_ticket)) {
+            PrintWarn(StringFormat("ポジション情報取得失敗, チケット=%d", position_ticket));
+            continue;
+        }
         double position_volume = PositionGetDouble(POSITION_VOLUME);
         double position_profit = PositionGetDouble(POSITION_PROFIT);
 
@@ -318,6 +351,9 @@ int ExpertMartingale::ClearLot() {
 
             if (order_retcode == 2) continue;
 
+            ExpertMartingale::MinusPositionNum();
+            ExpertMartingale::ConvertInvalidPosition(i);
+
             double deal_profit = GetSettlementProfit(myTrade.ResultDeal());
             total_benefit += deal_profit;
             ExpertMartingale::AddClearLotLosscutList(deal_profit);
@@ -333,17 +369,22 @@ int ExpertMartingale::ClearLot() {
         }
 
         if (settlement_volume < INITIAL_VOLUME) continue;
+        double remaining_volume = position_volume - settlement_volume;
 
-        string comment = StringFormat("[ポジション調整]損失分、チケット=%d, %f/%f", position_ticket, settlement_volume, position_volume);
+        string comment = StringFormat("[ポジション調整]損失分、チケット=%d, %.2f/%.2f", position_ticket, remaining_volume, position_volume);
         myTrade.PositionClose(position_ticket, ULONG_MAX, settlement_volume, comment);
         int order_retcode = ExpertMartingale::OrderRetcode(false);
         if (order_retcode == 0) {
             ExpertMartingale::PlusOrderErrorCount();
-            PrintError(StringFormat("ポジション調整失敗（損失）, チケット=%d, %f/%f", position_ticket, settlement_volume, position_volume));
+            PrintError(StringFormat("ポジション調整失敗（損失）, チケット=%d, %.2f/%.2f", position_ticket, remaining_volume, position_volume));
             return 0;
         }
 
         if (order_retcode == 2) continue;
+
+        
+        ExpertMartingale::SetPositionVolumeByKey(i, remaining_volume);
+
 
         double deal_profit = GetSettlementProfit(myTrade.ResultDeal());
         total_benefit += deal_profit;
@@ -352,12 +393,15 @@ int ExpertMartingale::ClearLot() {
     }
 
     ExpertMartingale::AddClearLotProfitList(total_benefit);
+    ExpertMartingale::AddPositionProfit(total_benefit);
 
 
     return 1;
 }
 
+
 /** ポジション全決済
+ * 稼働EAでのポジションは全て決済したいため、実際のポジション情報を取得するようにする
  * return int 決済数
 **/
 int ExpertMartingale::SettlementAllPosition() {
@@ -368,6 +412,7 @@ int ExpertMartingale::SettlementAllPosition() {
         for (int i = 0; i < total_position; i++) {
             // PositionGetTicket(i)だとポジションチケットを取得できないことがある
             if (!PositionSelect(Symbol())) continue;// 対象シンボルのポジションをチケット番号が最も古いものを取得する
+            if (ExpertMartingale::GetMagicNumber() != PositionGetInteger(POSITION_MAGIC)) continue;
             ulong position_ticket = PositionGetInteger(POSITION_TICKET);
             if (position_ticket == 0) continue;
             string comment = StringFormat("全決済: ポジション: %d", position_ticket);
@@ -397,7 +442,7 @@ int ExpertMartingale::SettlementAllPosition() {
             }
         }
 
-        if (PositionsTotal() == 0) {
+        if (GetPositionNumByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber()) == 0) {
             break;
         }
         PrintWarn("全決済完了しなかったため再度実行");
@@ -405,13 +450,18 @@ int ExpertMartingale::SettlementAllPosition() {
     }
     
     if (total_revenue < 0) {
-        PrintWarn(StringFormat("損失発生、損益=%f", total_revenue));
+        PrintWarn(StringFormat("損失発生、損益=%.3f", total_revenue));
     }
 
     if (ret_cnt == 1) {
         ExpertMartingale::PlusFirstTradeBenefitCount();
     }
     ExpertMartingale::AddAllSettlementProfitList(total_revenue);
+    ExpertMartingale::AddPositionProfit(total_revenue);
+    PositionHistoryStruct position_history;
+    position_history.first_ticket = ExpertMartingale::GetPositionTicketByKey(0);
+    position_history.profit = ExpertMartingale::GetPositionProfit();
+    ExpertMartingale::AddPositionHistory(position_history);
 
     return ret_cnt;
 }
@@ -440,86 +490,62 @@ int ExpertMartingale::CalcFirstTradeTrend() {
     return IS_SELLING;
 }
 
-double ExpertMartingale::CalcVolumeByTradeCount(int trade_num) {
-    if (trade_num < 1) return 0.0;
-    return INITIAL_VOLUME * MathPow(2, trade_num-1);
-}
 
-double ExpertMartingale::CalcRevenue(int seg_point) {
-    int trade_cnt = ExpertMartingale::GetTradeNum();
-    int init_trade_flag = ExpertMartingale::GetInitTradeFlag();
-    int base_seg_point = 0;  // トレード時点の基準ポイント
-    double revenue = 0;
-    bool is_benefit = false;
-
-    if (init_trade_flag == 0) {
-        return revenue;
-    }
-    
-    // 初回トレードフラグによって、基準ポイントの基準が変わる
-    // is_benefit: 差が0の場合はpriceの計算が0になるので考慮しない
-    for (int i = 0;i < trade_cnt;i++) {
-        if (init_trade_flag == IS_BUYING) {
-            if (i == 0) {  // 初回トレード
-                base_seg_point = INIT_BASE_POINT;
-                is_benefit = base_seg_point <= seg_point;
-            }else if (i % 2 == 0) { // 偶数が買い
-                base_seg_point = INIT_BASE_POINT + i - 1;
-                is_benefit = base_seg_point <= seg_point;
-            } else {
-                base_seg_point = INIT_BASE_POINT - i;
-                is_benefit = base_seg_point >= seg_point;
-            }
-
-        } else if (init_trade_flag == IS_SELLING) {
-            if (i == 0) {  // 初回トレード
-                base_seg_point = INIT_BASE_POINT;
-                is_benefit = base_seg_point >= seg_point;
-            }else if (i % 2 == 0) { // 偶数が売り
-                base_seg_point = INIT_BASE_POINT - i + 1;
-                is_benefit = base_seg_point >= seg_point;
-            } else {
-                base_seg_point = INIT_BASE_POINT + i;
-                is_benefit = base_seg_point <= seg_point;
-            }
-        }
-
-        // 現在のポイントとトレード時点の基準ポイントの差 * volume
-        double total_volume = ExpertMartingale::CalcVolumeByTradeCount(i+1);
-        double price = MathAbs(seg_point - base_seg_point) * total_volume;
-        
-        if (is_benefit) {
-            revenue += price;
-        } else {
-            revenue -= price;
-        }
-    }
-    return revenue;
-}
-
-int ExpertMartingale::CalcNextTradeSegPoint() {
+double ExpertMartingale::CalcNextTradeSegPrice() {
     int next_trade_flag = ExpertMartingale::GetNextTradeFlag();
     int init_trade_flag = ExpertMartingale::GetInitTradeFlag();
-    int next_seg_point = 0;
+    double init_price = ExpertMartingale::GetInitPrice();
+    double next_seg_price = 0.0;
 
     // 初回トレードによって基準価格の初期値が変わる
     if (next_trade_flag == IS_BUYING) {
-        next_seg_point = ExpertMartingale::GetBuyingNum();
+        next_seg_price = init_price + (ExpertMartingale::GetBuyingNum() * MARTINGALE_PIPS);
         if (init_trade_flag == IS_SELLING) {
-            next_seg_point += 1;
+            next_seg_price += MARTINGALE_PIPS;
         }
     } else {
-        next_seg_point = 0 - (ExpertMartingale::GetSellingNum());
+        next_seg_price = init_price - (ExpertMartingale::GetSellingNum() * MARTINGALE_PIPS);
         if (init_trade_flag == IS_BUYING) {
-            next_seg_point -= 1;
+            next_seg_price -= MARTINGALE_PIPS;
         }
     }
-    return next_seg_point;
+    return next_seg_price;
 }
 
-int ExpertMartingale::CalcSegPoint(double latest_price) {
-    double seg_price = latest_price - ExpertMartingale::GetInitPrice();
-    return (int)(seg_price / MARTIGALE_PIPS);
+int ExpertMartingale::CalcSegPoint(double price) {
+    double seg_price = price - ExpertMartingale::GetInitPrice();
+    return (int)(seg_price / MARTINGALE_PIPS);
+}
+
+/** ロジック上、利益が出る価格を算出（設定PIPS単位）
+ * 
+**/
+double ExpertMartingale::CalcRevenuePrice(double latest_price) {
+    int latest_seg_point = ExpertMartingale::CalcSegPoint(latest_price);
+
+    double total_seg_point_profit = 0.0;
+    for (int i = 0; i < ExpertMartingale::GetPositionSize(); i++) {
+        if (ExpertMartingale::GetPositionIsValidByKey(i) == false) continue;
+
+        int trade_flag = ExpertMartingale::GetPositionTradeFlagByKey(i);
+        int position_seg_point = ExpertMartingale::GetPositionSegPointByKey(i);
+        double position_volume = ExpertMartingale::GetPositionVolumeByKey(i);
+
+        
+        int seg_point_diff = 0;
+        if (trade_flag == IS_BUYING) {
+            seg_point_diff = latest_seg_point - position_seg_point;
+        } else if (trade_flag == IS_SELLING) {
+            seg_point_diff = position_seg_point - latest_seg_point;
+        }
+        total_seg_point_profit += seg_point_diff * position_volume;
+    }
+
+    return total_seg_point_profit;
+}
+
+bool ExpertMartingale::IsRevenueBySegCalc(double latest_price) {
+    return ExpertMartingale::CalcRevenuePrice(latest_price) >= INITIAL_VOLUME;
 }
 
 int ExpertMartingale::GetNextTradeFlag() {
@@ -528,7 +554,7 @@ int ExpertMartingale::GetNextTradeFlag() {
             return ExpertMartingale::GetInitTradeFlag();
         } else {  // 初回トレード情報なし
             if (ExpertMartingale::GetTradeNum() > 0) {
-                PrintWarn(StringFormat("Undefined init_trade_flag, but has positions, buying_num: %d, selling_num: %d", ExpertMartingale::entry_struct.buying_num, ExpertMartingale::entry_struct.selling_num));
+                PrintWarn(StringFormat("Undefined init_trade_flag, but has positions, buying_num: %d, selling_num: %d", ExpertMartingale::GetBuyingNum(), ExpertMartingale::GetSellingNum()));
             }
             return ExpertMartingale::CalcFirstTradeTrend();
         }
@@ -543,15 +569,26 @@ int ExpertMartingale::GetNextTradeFlag() {
     return IS_BUYING;
 }
 
+int ExpertMartingale::GetLatestTradeFlag() {
+    if (!ExpertMartingale::HasInitTradeFlag()) {
+        return IS_NOTRADE;
+    }
+    int next_trade_flag = ExpertMartingale::GetNextTradeFlag();
+    if (next_trade_flag == IS_BUYING) return IS_SELLING;
+    if (next_trade_flag == IS_SELLING) return IS_BUYING;
+    return IS_NOTRADE;
+}
+
 void OnInit() {
     PrintNotice(StringFormat("Start ExpertMartingale, symbol: %s", Symbol()));
 
     EventSetTimer(ONE_DATE_DATETIME); //1日間隔でタイマーイベントを呼び出す
-    if (IS_INIT_OF_ENTRY_STRUCT) {
-        ExpertMartingale::InitEntryStruct();
-        PrintNotice("Entry構造体を初期化しました");
+
+    if (IS_INIT_OF_POSITIONS_STRUCT) {
+        ExpertMartingale::InitPositionsStruct();
+        PrintNotice("Positions構造体を初期化しました");
     } else {
-        PrintNotice("Entry初期化を初期化しませんでした");
+        PrintNotice("Positions初期化を初期化しませんでした");
     }
 
     if (IS_INIT_OF_TRADE_ANALYST_STRUCT) {
@@ -564,9 +601,17 @@ void OnInit() {
     if (IS_FORCE_STOPPED) {
         PrintNotice("ポジションがなくなり次第強制終了します。");
     }
+
+    if (Symbol() == "usdjpy") {
+        ExpertMartingale::SetMagicNumber(100001);
+    } else if (Symbol() == "EURUSD") {
+        ExpertMartingale::SetMagicNumber(100002);
+    } else {
+        ExpertMartingale::SetMagicNumber(100000);
+    }
     
     myTrade.SetAsyncMode(false);
-    myTrade.SetExpertMagicNumber(MAGIC_NUMBER);
+    myTrade.SetExpertMagicNumber(ExpertMartingale::GetMagicNumber());
     myTrade.SetTypeFilling(ORDER_FILLING_IOC);
 
     if (!mySymbolInfo.Refresh()) {
@@ -576,7 +621,7 @@ void OnInit() {
     }
 
     if (!mySymbolInfo.IsValidMinVolume(INITIAL_VOLUME)) {
-        PrintError(StringFormat("Initial Volume is too Low than %f", mySymbolInfo.LotsMin()));
+        PrintError(StringFormat("Initial Volume is too Low than %.5f", mySymbolInfo.LotsMin()));
         ForceStopEa();
         return;
     }
@@ -594,7 +639,7 @@ void OnTick() {
 
 void OnTimer() {
     if (myAccountInfo.IsMarginLevelSafe(MARGIN_SAFE_LEVEL_RATIO) == false) {
-        PrintWarn(StringFormat("証拠金維持率に余裕がありません。 証拠金維持率: %f", myAccountInfo.MarginLevel()));
+        PrintWarn(StringFormat("証拠金維持率に余裕がありません。 証拠金維持率: %.5f", myAccountInfo.MarginLevel()));
     }
 
     if (!mySymbolInfo.Refresh()) {
@@ -609,8 +654,80 @@ void OnTimer() {
         PrintError("サマリー_dailyのメール送信失敗");
     }
     myLogHandler.DeleteOlderLogFile(MinusDayForDatetime(TimeLocal(), 30));
+
+    if (ExpertMartingale::IsLogicNormally() == 2) {
+        ForceStopEa();
+        return;
+    }
+}
+
+/** ロジックチェック
+ * return int OK: 0, warning: 1, force stopped: 2
+**/
+int ExpertMartingale::IsLogicNormally() {
+    if (GetPositionNumByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber()) != ExpertMartingale::GetPositionNum()) {
+        PrintError(StringFormat("ロジックバグ. 保有ポジション数が一致しない, real: %d, getter: %d", GetPositionNumByTargetEa(Symbol(), ExpertMartingale::GetMagicNumber()), ExpertMartingale::GetPositionNum()));
+        return 1;
+    }
+
+    if (ExpertMartingale::GetPositionSize() != (ExpertMartingale::GetBuyingNum() + ExpertMartingale::GetSellingNum())) {
+        PrintError(StringFormat("ロジックバグ. ポジション構造体数と売買数が一致しない, 構造体数: %d, 売買数: %d",
+        ExpertMartingale::GetPositionSize(), (ExpertMartingale::GetBuyingNum() + ExpertMartingale::GetSellingNum())));
+    }
+
+    int real_position_num = 0;
+    for (int i = 0; i < ExpertMartingale::GetPositionSize(); i++) {
+        Print("seg point");
+        Print(ExpertMartingale::GetPositionSegPointByKey(i));
+        if (ExpertMartingale::GetPositionIsValidByKey(i) == false) continue;
+
+        ulong logic_position_ticket = ExpertMartingale::GetPositionTicketByKey(i);
+        if (!PositionSelectByTicket(logic_position_ticket)) {
+            PrintError(StringFormat("ロジックバグ. 保有ポジションチケットを保有していない. logic_position_ticket: %d", logic_position_ticket));
+            return 1;
+        }
+        real_position_num += 1;
+
+        if (ExpertMartingale::GetMagicNumber() != PositionGetInteger(POSITION_MAGIC)) continue;
+        ulong real_position_ticket = PositionGetInteger(POSITION_TICKET);
+        if (real_position_ticket == 0) continue;
+
+        double real_position_price = PositionGetDouble(POSITION_PRICE_OPEN);
+        double real_position_volume = PositionGetDouble(POSITION_VOLUME);
+
+        int positions_element = ExpertMartingale::SearchPositionsElementByTicket(real_position_ticket, true);
+        if (positions_element == -1) {
+            PrintError(StringFormat("ロジックバグ. 保有中ポジションを保持できていない, position_ticket: %d", real_position_ticket));
+            return 1;
+        }
+
+        double logic_position_price = ExpertMartingale::GetPositionPriceByKey(positions_element);
+        if (logic_position_price != real_position_price) {
+            PrintError(StringFormat(
+                "ロジックバグ. 保有中ポジション価格が一致しない, position_ticket: %d, real_price: %.3f, logic_price: %.3f",
+                real_position_ticket, real_position_price, logic_position_price
+            ));
+            return 1;
+        }
+
+        double logic_position_volume = ExpertMartingale::GetPositionVolumeByKey(positions_element);
+        if (logic_position_volume != real_position_volume) {
+            PrintError(StringFormat(
+                "ロジックバグ. 保有中ポジションロット数が一致しない, position_ticket: %d, real_volume: %.2f, logic_volume: %.2f",
+                real_position_ticket, real_position_volume, logic_position_volume
+            ));
+            return 1;
+        }
+    }
+
+    if (real_position_num != ExpertMartingale::GetPositionNum()) {
+        PrintError(StringFormat("ロジックバグ. 保有ポジション数が一致しない. real: %d, logic: %d", real_position_num, ExpertMartingale::GetPositionNum()));
+        return 1;
+    }
+    
+
+    return 0;
 }
 
 void OnDeinit() {
-
 }

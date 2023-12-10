@@ -219,6 +219,23 @@ bool IsDeceptionTrade(ulong position_ticket, double allowed_percent) export {
     return false;
 }
 
+/** 保有ポジション数
+ * 引数1: シンボル
+ * 引数2: magic number
+**/
+int GetPositionNumByTargetEa(string symbol, long magic_number) export {
+    int total_position = PositionsTotal();
+    int position_num = 0;
+    for (int i = 0; i < total_position; i++) {
+        if (!PositionSelect(symbol)) continue;
+        if (PositionGetInteger(POSITION_TICKET) == 0) continue;
+        if (magic_number != PositionGetInteger(POSITION_MAGIC)) continue;
+
+        position_num += 1;
+    }
+    return position_num;
+}
+
 /** 決済済みチケットの損益取得
  * 引数1：約定チケット
  * return double 損益
@@ -253,6 +270,29 @@ double GetAllPositionProfit() export {
     return total_profit;
 }
 
+/** 保有ポジションの合計損益取得
+ * 
+**/
+double GetAllPositionProfitByTargetEa(string symbol, long magic_number) export {
+    int total_position = PositionsTotal();
+    double total_profit = 0.0;
+
+    for (int i = 0; i < total_position; i++) {
+        if (!PositionSelect(symbol)) continue;
+        if (magic_number != PositionGetInteger(POSITION_MAGIC)) continue;
+
+        ulong position_ticket = PositionGetInteger(POSITION_TICKET);
+        if (position_ticket == 0) {
+            Print("[WARN] cannot get position ticket");
+            continue;
+        }
+        PositionSelectByTicket(position_ticket);
+        double position_profit = PositionGetDouble(POSITION_PROFIT);
+        total_profit += position_profit;
+    }
+    return total_profit;
+}
+
 double GetTotalSettlementProfit() export {
     // 全ての取引履歴を取得
     // テストトレードの場合、最初の取引履歴は入金となる
@@ -266,6 +306,33 @@ double GetTotalSettlementProfit() export {
             Print("取引履歴の取得失敗");
             break;
         }
+        total_profit += GetSettlementProfit(deal_ticket);
+    }
+    return total_profit;
+}
+
+/** 対象EAの取引履歴を取得
+ * 
+**/
+double GetTotalSettlementProfitByTargetEa(string symbol, long magic_number) export {
+    // テストトレードの場合、最初の取引履歴は入金となる
+    HistorySelect(0,TimeCurrent());
+    int history_num = HistoryDealsTotal();
+    double total_profit = 0.0;
+
+    for(int i = 0;i < history_num;i++) {
+        ulong deal_ticket = HistoryDealGetTicket(i);
+        if(deal_ticket == 0) {
+            Print("取引履歴の取得失敗");
+            break;
+        }
+        HistorySelect(0,TimeCurrent());  // 約定履歴を受信
+        if (!HistoryDealSelect(deal_ticket)) {
+            PrintFormat("存在しない約定チケットです, deal_ticket: %d", deal_ticket);
+            return 0.0;
+        }
+        if (HistoryDealGetString(deal_ticket, DEAL_SYMBOL) != symbol) continue;
+        if (HistoryDealGetInteger(deal_ticket, DEAL_MAGIC) != magic_number) continue;
         total_profit += GetSettlementProfit(deal_ticket);
     }
     return total_profit;
