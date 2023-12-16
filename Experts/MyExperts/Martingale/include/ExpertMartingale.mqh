@@ -153,9 +153,19 @@ class ExpertMartingale {
             ExpertMartingale::positions_struct.positions[size] = position;
         }
 
+        static void ExpertMartingale::ExchangePosition(PositionStruct &position, int key) {
+            ExpertMartingale::positions_struct.positions[key] = position;
+        }
+
         static bool ExpertMartingale::HasInitTradeFlag() {
             if (ExpertMartingale::GetPositionSize() == 0) return false;
             return ExpertMartingale::GetPositionTradeFlagByKey(0) != IS_NOTRADE;
+        }
+
+        static int ExpertMartingale::SwitchTradeFlag(int trade_flag) {
+            if (trade_flag == IS_BUYING) return IS_SELLING;
+            if (trade_flag == IS_SELLING) return IS_BUYING;
+            return IS_NOTRADE;
         }
 
         static int ExpertMartingale::SetPositionStruct(PositionStruct &position_struct, ulong ticket, int trade_flag, double price, double volume) {
@@ -200,6 +210,7 @@ class ExpertMartingale {
         static int ExpertMartingale::CalcSegPoint(double price);
         static int ExpertMartingale::GetNextTradeFlag();
         static int ExpertMartingale::GetLatestTradeFlag();
+        static double ExpertMartingale::GetNextTradeVolume();
         static int ExpertMartingale::IsLogicNormally();
 
         static double ExpertMartingale::GetTradeMaxVolume() { return ExpertMartingale::trade_analysis_struct.trade_max_volume; }
@@ -288,7 +299,7 @@ void ExpertMartingale::PrintTradeAnalysis() {
         ulong first_trade_ticket = ExpertMartingale::trade_analysis_struct.position_histories[i].first_ticket;
         double profit = ExpertMartingale::trade_analysis_struct.position_histories[i].profit;
         if (profit < 0) {
-            // PrintFormat("[SUMMARY] profit_per_martingale: %.3f, first_trade_ticket: %d", profit, first_trade_ticket);
+            PrintFormat("[SUMMARY] profit_per_martingale: %.3f, first_trade_ticket: %d", profit, first_trade_ticket);
         }
     }
 
