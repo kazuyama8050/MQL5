@@ -15,6 +15,7 @@ struct EntryStruct
     double init_price;  // 初回トレードの売買価格
     int clear_lot_num;  // ポジション整理回数
     datetime latest_position_trade_datetime;  // 最新ポジションの取引日時
+    bool can_all_settlement_flag;  // 全決済フラグ
 };
 
 struct TradeAnalysisStruct
@@ -45,7 +46,9 @@ class ExpertMartingale {
         static int ExpertMartingale::SettlementAllPosition();
         static int ExpertMartingale::ClearLot();
         static int ExpertMartingale::CalcFirstTradeTrend();
+        static bool ExpertMartingale::IsShortTrendGoing(int trade_flag, double base_price, double now_price);
         static int ExpertMartingale::GetNextTradeFlag();
+        static int ExpertMartingale::GetLatestTradeFlag();
 
         static int ExpertMartingale::GetBuyingNum() { return ExpertMartingale::entry_struct.buying_num; }
         static int ExpertMartingale::GetSellingNum() { return ExpertMartingale::entry_struct.selling_num; }
@@ -55,6 +58,7 @@ class ExpertMartingale {
         static double ExpertMartingale::GetInitPrice() { return ExpertMartingale::entry_struct.init_price; }
         static int ExpertMartingale::GetClearLotNum() { return ExpertMartingale::entry_struct.clear_lot_num; }
         static datetime ExpertMartingale::GetLatestPositionTradeDatetime() { return ExpertMartingale::entry_struct.latest_position_trade_datetime; }
+        static bool ExpertMartingale::GetCanAllSettlementFlag() { return ExpertMartingale::entry_struct.can_all_settlement_flag; }
 
         static void ExpertMartingale::PlusBuyingNum() { ExpertMartingale::entry_struct.buying_num += 1; }
         static void ExpertMartingale::PlusSellingNum() { ExpertMartingale::entry_struct.selling_num += 1; }
@@ -63,6 +67,7 @@ class ExpertMartingale {
         static void ExpertMartingale::SetInitPrice(double init_price) { ExpertMartingale::entry_struct.init_price = init_price; }
         static void ExpertMartingale::SetClearLotNum(int clear_lot_num) { ExpertMartingale::entry_struct.clear_lot_num = clear_lot_num; }
         static void ExpertMartingale::SetLatestPositionTradeDatetime(datetime latest_position_trade_datetime) { ExpertMartingale::entry_struct.latest_position_trade_datetime = latest_position_trade_datetime; }
+        static void ExpertMartingale::SetCanAllSettlementFlag(bool can_all_settlement_flag) { ExpertMartingale::entry_struct.can_all_settlement_flag = can_all_settlement_flag; }
 
         static bool ExpertMartingale::HasInitTradeFlag() { return ExpertMartingale::entry_struct.init_trade_flag != 0; }
 
@@ -92,6 +97,7 @@ void ExpertMartingale::InitEntryStruct() {
     ExpertMartingale::entry_struct.init_price = 0.0;
     ExpertMartingale::entry_struct.clear_lot_num = 0;
     ExpertMartingale::entry_struct.latest_position_trade_datetime = TimeLocal();
+    ExpertMartingale::entry_struct.can_all_settlement_flag = false;
 }
 
 void ExpertMartingale::InitTradeAnalysisStruct() {

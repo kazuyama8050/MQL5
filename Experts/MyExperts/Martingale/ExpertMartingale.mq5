@@ -24,6 +24,7 @@
 #import "MyLibraries/Indicator.ex5"
     int GetVolumeList(CArrayLong &volume_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    double GetLatestClosePrice(string symbol, ENUM_TIMEFRAMES timeframe);
 #import
 #import "MyLibraries/Common.ex5"
     void ForceStopEa();
@@ -126,8 +127,7 @@ int ExpertMartingale::MainLoop() {
         PrintError(StringFormat("ロジックバグ : ロング、ショートで交互にトレードされていない可能性あり, buying_num: %d, selling_num: %d", ExpertMartingale::GetBuyingNum(), ExpertMartingale::GetSellingNum()));
         return 0;
     }
-    CArrayDouble price_15_list;
-    GetClosePriceList(price_15_list, Symbol(), PERIOD_M15, 10);
+    double latest_price_15 = GetLatestClosePrice(Symbol(), PERIOD_M15);
 
     int next_trade_flag = ExpertMartingale::GetNextTradeFlag();
     if (next_trade_flag != IS_BUYING && next_trade_flag != IS_SELLING) {
@@ -174,11 +174,26 @@ int ExpertMartingale::MainLoop() {
         return 1;
     }
 
-    int seg_point = ExpertMartingale::CalcSegPoint(price_15_list[0]);  // 現在のセグポイント
+    int seg_point = ExpertMartingale::CalcSegPoint(latest_price_15);  // 現在のセグポイント
     bool is_revenue = ExpertMartingale::CalcRevenue(seg_point) >= INITIAL_VOLUME;
 
-    // セグポイントでの計算上、トータルで利益が出ていれば全決済
     if (is_revenue) {
+        ExpertMartingale::SetCanAllSettlementFlag(true);
+    }
+
+    // セグポイントでの計算上、トータルで利益が出ていれば全決済
+    if (ExpertMartingale::GetCanAllSettlementFlag()) {
+        // 超短期トレンド継続中であれば待機
+        int latest_trade_flag = ExpertMartingale::GetLatestTradeFlag();
+        while(true) {
+            double latest_price_15_temp = GetLatestClosePrice(Symbol(), PERIOD_M15);
+            if (ExpertMartingale::IsShortTrendGoing(latest_trade_flag, latest_price_15, latest_price_15_temp)) {
+                Sleep(3600);
+                continue;
+            }
+            break;
+        }
+        
         if (ExpertMartingale::SettlementAllPosition() == 0) {
             PrintError("全決済異常エラーのため異常終了");
             return 0;
@@ -413,6 +428,8 @@ int ExpertMartingale::SettlementAllPosition() {
     }
     ExpertMartingale::AddAllSettlementProfitList(total_revenue);
 
+    ExpertMartingale::SetCanAllSettlementFlag(false);  // 全決済可能フラグをfalseにしておく
+
     return ret_cnt;
 }
 
@@ -440,6 +457,27 @@ int ExpertMartingale::CalcFirstTradeTrend() {
     return IS_SELLING;
 }
 
+bool ExpertMartingale::IsShortTrendGoing(int trade_flag, double base_price, double now_price) {
+    CMyMovingAverage myMovingAverage();
+    if (!myMovingAverage.Init(Symbol(), PERIOD_M15, MA_PERIOD, 0, MA_METHOD, PRICE_CLOSE)) {
+        PrintWarn("Failed Init IMA Handle");
+        return false;
+    }
+    if (!myMovingAverage.SetMaByPosition(0, 0, 4)) {
+        PrintWarn("Failed Get IMA Datas");
+        return false;
+    }
+    double latest_ma_data = myMovingAverage.GetImaData(0);
+    double oldest_ma_data = myMovingAverage.GetImaData(2);
+
+    if (trade_flag == IS_BUYING) {
+        return (latest_ma_data > oldest_ma_data) && now_price > base_price;
+    } else if (trade_flag == IS_SELLING) {
+        return (latest_ma_data < oldest_ma_data) && now_price < base_price;
+    }
+    return false;
+}
+
 double ExpertMartingale::CalcVolumeByTradeCount(int trade_num) {
     if (trade_num < 1) return 0.0;
     return INITIAL_VOLUME * MathPow(2, trade_num-1);
@@ -448,51 +486,50 @@ double ExpertMartingale::CalcVolumeByTradeCount(int trade_num) {
 double ExpertMartingale::CalcRevenue(int seg_point) {
     int trade_cnt = ExpertMartingale::GetTradeNum();
     int init_trade_flag = ExpertMartingale::GetInitTradeFlag();
-    int base_seg_point = 0;  // トレード時点の基準ポイント
     double revenue = 0;
-    bool is_benefit = false;
-
     if (init_trade_flag == 0) {
         return revenue;
     }
     
     // 初回トレードフラグによって、基準ポイントの基準が変わる
-    // is_benefit: 差が0の場合はpriceの計算が0になるので考慮しない
+    int buying_base_seg_point = INIT_BASE_POINT;
+    int selling_base_seg_point = INIT_BASE_POINT;
     for (int i = 0;i < trade_cnt;i++) {
+        int trade_flag = 0;
         if (init_trade_flag == IS_BUYING) {
             if (i == 0) {  // 初回トレード
-                base_seg_point = INIT_BASE_POINT;
-                is_benefit = base_seg_point <= seg_point;
+                trade_flag = IS_BUYING;
+                buying_base_seg_point = INIT_BASE_POINT;
             }else if (i % 2 == 0) { // 偶数が買い
-                base_seg_point = INIT_BASE_POINT + i - 1;
-                is_benefit = base_seg_point <= seg_point;
+                trade_flag = IS_BUYING;
+                buying_base_seg_point += 1;
             } else {
-                base_seg_point = INIT_BASE_POINT - i;
-                is_benefit = base_seg_point >= seg_point;
+                trade_flag = IS_SELLING;
+                selling_base_seg_point -= 1;
             }
 
         } else if (init_trade_flag == IS_SELLING) {
             if (i == 0) {  // 初回トレード
-                base_seg_point = INIT_BASE_POINT;
-                is_benefit = base_seg_point >= seg_point;
+                trade_flag = IS_SELLING;
+                selling_base_seg_point = INIT_BASE_POINT;
             }else if (i % 2 == 0) { // 偶数が売り
-                base_seg_point = INIT_BASE_POINT - i + 1;
-                is_benefit = base_seg_point >= seg_point;
+                trade_flag = IS_SELLING;
+                selling_base_seg_point -= 1;
             } else {
-                base_seg_point = INIT_BASE_POINT + i;
-                is_benefit = base_seg_point <= seg_point;
+                trade_flag = IS_BUYING;
+                buying_base_seg_point += 1;
             }
         }
 
         // 現在のポイントとトレード時点の基準ポイントの差 * volume
         double total_volume = ExpertMartingale::CalcVolumeByTradeCount(i+1);
-        double price = MathAbs(seg_point - base_seg_point) * total_volume;
-        
-        if (is_benefit) {
-            revenue += price;
+        double price;
+        if (trade_flag == IS_BUYING) {
+            price = (seg_point - buying_base_seg_point) * total_volume;
         } else {
-            revenue -= price;
+            price = (selling_base_seg_point - seg_point) * total_volume;
         }
+        revenue += price;
     }
     return revenue;
 }
@@ -541,6 +578,16 @@ int ExpertMartingale::GetNextTradeFlag() {
     }
     PrintError("Maybe Logic Bug By Calc GetNextTradeFlag");
     return IS_BUYING;
+}
+
+int ExpertMartingale::GetLatestTradeFlag() {
+    int next_trade_flag = ExpertMartingale::GetNextTradeFlag();
+    if (next_trade_flag == IS_BUYING) {
+        return IS_SELLING;
+    } else if (next_trade_flag == IS_SELLING) {
+        return IS_BUYING;
+    }
+    return 0;
 }
 
 void OnInit() {
