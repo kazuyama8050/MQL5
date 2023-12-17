@@ -62,6 +62,16 @@ int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES t
     return 1;
 }
 
+/**  直近の終値を取得する
+ * 引数1: シンボル
+ * 引数2: チャート時間軸
+ * 引数3: 取得数
+ * return double 終値
+**/
+double GetLatestClosePrice(string symbol, ENUM_TIMEFRAMES timeframe) export {
+    return iClose(symbol, timeframe, 0);
+}
+
 /**  直近の高値リスト格納する
  * 引数1: 格納先配列ポインタ  現在価格から順に格納
  * 引数2: シンボル

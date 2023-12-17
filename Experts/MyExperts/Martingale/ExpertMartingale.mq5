@@ -20,6 +20,7 @@
 #import
 #import "MyLibraries/Indicator.ex5"
     int GetClosePriceList(CArrayDouble &price_list, string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    double GetLatestClosePrice(string symbol, ENUM_TIMEFRAMES timeframe);
 #import
 #import "MyLibraries/Common.ex5"
     void ForceStopEa();
@@ -519,6 +520,8 @@ int ExpertMartingale::SettlementAllPosition() {
     position_history.first_ticket = ExpertMartingale::GetPositionTicketByKey(0);
     position_history.profit = ExpertMartingale::GetPositionProfit();
     ExpertMartingale::AddPositionHistory(position_history);
+
+    ExpertMartingale::SetCanAllSettlementFlag(false);  // 全決済可能フラグをfalseにしておく
 
     return ret_cnt;
 }
