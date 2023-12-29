@@ -115,3 +115,13 @@ int GetDayOfWeekFromDatetime(datetime target_datetime) export {
     TimeToStruct(target_datetime, datetime_struct);
     return datetime_struct.day_of_week;
 }
+
+/** datetime型から日にちを取得する
+ * args1 変換前datetime
+ * return int 日にち
+**/
+int GetDateFromDatetime(datetime target_datetime) export {
+    MqlDateTime datetime_struct;
+    TimeToStruct(target_datetime, datetime_struct);
+    return datetime_struct.day;
+}

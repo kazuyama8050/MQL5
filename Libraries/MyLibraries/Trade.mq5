@@ -278,16 +278,18 @@ double GetAllPositionProfitByTargetEa(string symbol, long magic_number) export {
     double total_profit = 0.0;
 
     for (int i = 0; i < total_position; i++) {
-        if (!PositionSelect(symbol)) continue;
-        if (magic_number != PositionGetInteger(POSITION_MAGIC)) continue;
-
-        ulong position_ticket = PositionGetInteger(POSITION_TICKET);
+        ulong  position_ticket = PositionGetTicket(i);
         if (position_ticket == 0) {
             Print("[WARN] cannot get position ticket");
             continue;
         }
         PositionSelectByTicket(position_ticket);
+        
+        if (symbol != PositionGetString(POSITION_SYMBOL)) continue;
+        if (magic_number != PositionGetInteger(POSITION_MAGIC)) continue;
         double position_profit = PositionGetDouble(POSITION_PROFIT);
+        
+        // Print(position_profit);
         total_profit += position_profit;
     }
     return total_profit;

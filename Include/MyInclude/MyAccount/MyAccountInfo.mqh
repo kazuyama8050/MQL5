@@ -47,5 +47,5 @@ string CMyAccountInfo::MarginModeDescription(void) const
 **/
 bool CMyAccountInfo::IsMarginLevelSafe(int ratio) const
 {
-    return MarginLevel() <= MarginCall() * ratio;
+    return MarginLevel() >= MarginCall() * ratio;
 }

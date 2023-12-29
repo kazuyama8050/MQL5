@@ -32,6 +32,7 @@ struct PositionsStruct
     int selling_num;  // 売った回数（決済済み含む）
     int position_num;  // 保有ポジション数（未決済のみ）
     int clear_lot_num;  // ポジション整理回数
+    bool is_clear_restart;  // ポジション調整 & リスタートフラグ
     double profit;  // この構造体が生きてる間の損益（分析用）
 };
 
@@ -48,6 +49,7 @@ struct TradeAnalysisStruct
     int martingale_trade_cnt;  // 両建てマーチンゲール手法によるトレード回数
     int first_trade_benefit_cnt;  // 初回トレードで勝った回数
     double trade_max_volume;  // 最大ロット数履歴
+    double trade_min_margin_rate;
     PositionHistoryStruct position_histories[];  // ポジション履歴
     CArrayDouble all_settlement_profit_list;  // 全決済時トータル損益履歴配列
     CArrayDouble clear_lot_profit_list;  // ポジション調整時トータル損益履歴配列（調整後との調整金額）
@@ -88,6 +90,7 @@ class ExpertMartingale {
             return ExpertMartingale::GetPositionPriceByKey(0);
         }
         static int ExpertMartingale::GetClearLotNum() { return ExpertMartingale::positions_struct.clear_lot_num; }
+        static bool ExpertMartingale::IsClearRestart() { return ExpertMartingale::positions_struct.is_clear_restart; }
         static double ExpertMartingale::GetLatestPositionPrice() {
             int size = ExpertMartingale::GetPositionSize();
             if (size == 0) return 0.0;
@@ -121,6 +124,7 @@ class ExpertMartingale {
         static void ExpertMartingale::MinusPositionNum() { ExpertMartingale::positions_struct.position_num -= 1; }
         static void ExpertMartingale::AddPositionProfit(double profit) { ExpertMartingale::positions_struct.profit += profit; }
         static void ExpertMartingale::SetClearLotNum(int clear_lot_num) { ExpertMartingale::positions_struct.clear_lot_num = clear_lot_num; }
+        static void ExpertMartingale::SwitchClearRestartFlag() { ExpertMartingale::positions_struct.is_clear_restart = true; }
         static void ExpertMartingale::SetPositionPriceByKey(int key, double price) { ExpertMartingale::positions_struct.positions[key].price = price; }
         static void ExpertMartingale::SetPositionVolumeByKey(int key, double volume) { ExpertMartingale::positions_struct.positions[key].volume = volume; }
 
@@ -168,13 +172,13 @@ class ExpertMartingale {
             return IS_NOTRADE;
         }
 
-        static int ExpertMartingale::SetPositionStruct(PositionStruct &position_struct, ulong ticket, int trade_flag, double price, double volume) {
+        static int ExpertMartingale::SetPositionStruct(PositionStruct &position_struct, ulong ticket, int trade_flag, double price, double volume, datetime trade_datetime) {
             position_struct.ticket = ticket;
             position_struct.trade_flag = trade_flag;
             position_struct.seg_point = ExpertMartingale::CalcTradingSegPoint(trade_flag);
             position_struct.price = price;
             position_struct.volume = volume;
-            position_struct.trade_datetime = TimeLocal();
+            position_struct.trade_datetime = trade_datetime;
             position_struct.is_valid = 1;
             return 1;
         }
@@ -201,7 +205,8 @@ class ExpertMartingale {
         static int ExpertMartingale::TradeOrder(int next_trade_flag);
         static int ExpertMartingale::OrderRetcode(bool is_open, bool all_settlement_flag = false);
         static double ExpertMartingale::CalcRevenuePrice(double latest_price);
-        static bool ExpertMartingale::IsRevenueBySegCalc(double latest_price);
+        static bool ExpertMartingale::IsRevenueBySegCalc(double latest_price, int pips_diff);
+        static int ExpertMartingale::GetAllSettlementPipsDiff();
 
         static double ExpertMartingale::CalcNextTradeSegPrice();
         static int ExpertMartingale::SettlementAllPosition();
@@ -214,6 +219,7 @@ class ExpertMartingale {
         static int ExpertMartingale::IsLogicNormally();
 
         static double ExpertMartingale::GetTradeMaxVolume() { return ExpertMartingale::trade_analysis_struct.trade_max_volume; }
+        static double ExpertMartingale::GetTradeMinMarginRate() { return ExpertMartingale::trade_analysis_struct.trade_min_margin_rate; }
         static int ExpertMartingale::GetFirstTradeBenefitCount() { return ExpertMartingale::trade_analysis_struct.first_trade_benefit_cnt; }
         static int ExpertMartingale::GetPositionHistorySize() { return ArraySize(ExpertMartingale::trade_analysis_struct.position_histories); }
 
@@ -222,6 +228,7 @@ class ExpertMartingale {
         static void ExpertMartingale::PlusMartingaleTradeCount() { ExpertMartingale::trade_analysis_struct.martingale_trade_cnt += 1; }
         static void ExpertMartingale::PlusFirstTradeBenefitCount() { ExpertMartingale::trade_analysis_struct.first_trade_benefit_cnt += 1; }
         static void ExpertMartingale::SetTradeMaxVolume(double trade_max_volume) { ExpertMartingale::trade_analysis_struct.trade_max_volume = trade_max_volume; }
+        static void ExpertMartingale::SetTradeMinMarginRate(double trade_min_margin_rate) { ExpertMartingale::trade_analysis_struct.trade_min_margin_rate = trade_min_margin_rate; }
         static void ExpertMartingale::AddAllSettlementProfitList(double all_settlement_profit) { ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Add(all_settlement_profit); }
         static void ExpertMartingale::AddClearLotProfitList(double clear_lot_profit) { ExpertMartingale::trade_analysis_struct.clear_lot_profit_list.Add(clear_lot_profit); }
         static void ExpertMartingale::AddClearLotBenefitList(double clear_lot_benefit) { ExpertMartingale::trade_analysis_struct.clear_lot_benefit_list.Add(clear_lot_benefit); }
@@ -241,6 +248,7 @@ void ExpertMartingale::InitPositionsStruct() {
     ExpertMartingale::positions_struct.selling_num = 0;
     ExpertMartingale::positions_struct.position_num = 0;
     ExpertMartingale::positions_struct.clear_lot_num = 0;
+    ExpertMartingale::positions_struct.is_clear_restart = false;
     ExpertMartingale::positions_struct.profit = 0;
 }
 
@@ -250,6 +258,7 @@ void ExpertMartingale::InitTradeAnalysisStruct() {
     ExpertMartingale::trade_analysis_struct.all_settlement_order_error_cnt = 0;
     ExpertMartingale::trade_analysis_struct.martingale_trade_cnt = 0;
     ExpertMartingale::trade_analysis_struct.trade_max_volume = 0.0;
+    ExpertMartingale::trade_analysis_struct.trade_min_margin_rate = DBL_MAX;
 }
 
 void ExpertMartingale::PrintTradeAnalysis() {
@@ -258,11 +267,12 @@ void ExpertMartingale::PrintTradeAnalysis() {
 
     int all_settlement_cnt = ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.Total();
     PrintFormat(
-        "[SUMMARY] 両建てマーチンゲール手法による取引回数: %d, 決済回数: %d, 初回トレード勝ち数: %d 最大トレードロット数: %.2f",
+        "[SUMMARY] 両建てマーチンゲール手法による取引回数: %d, 決済回数: %d, 初回トレード勝ち数: %d 最大トレードロット数: %.2f, 最小証拠金維持率: %.3f",
         ExpertMartingale::trade_analysis_struct.martingale_trade_cnt,
         all_settlement_cnt,
         ExpertMartingale::GetFirstTradeBenefitCount(),
-        ExpertMartingale::trade_analysis_struct.trade_max_volume
+        ExpertMartingale::trade_analysis_struct.trade_max_volume,
+        ExpertMartingale::trade_analysis_struct.trade_min_margin_rate
     );
 
     int all_settlement_benefit_cnt = 0;
