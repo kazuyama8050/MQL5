@@ -85,6 +85,11 @@ double MathDiffMeanForDouble(const CArrayDouble &array) export {
     return diff_mean;
 }
 
+double RoundToDecimal(double n, const int decimal_digits) export {
+    double multiplier = MathPow(10, decimal_digits);
+    return MathRound(n * multiplier) / multiplier;
+}
+
 //正規化
 double MathNormalizeDouble(const double target, const double &array[]) export {
     int array_cnt = ArraySize(array) - 1;
