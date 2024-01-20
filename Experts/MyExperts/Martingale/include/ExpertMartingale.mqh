@@ -36,6 +36,7 @@ struct PositionsStruct
     int position_num;  // 保有ポジション数（未決済のみ）
     int clear_lot_num;  // ポジション整理回数
     double profit;  // この構造体が生きてる間の損益（分析用）
+    double all_settlement_base_price;  // 全決済基準価格（トレンド判定なしで全決済ロジックに該当した時に本来全決済されるレート）
 };
 
 struct PositionHistoryStruct
@@ -57,6 +58,7 @@ struct TradeAnalysisStruct
     CArrayDouble clear_lot_profit_list;  // ポジション調整時トータル損益履歴配列（調整後との調整金額）
     CArrayDouble clear_lot_benefit_list;  // ポジション調整時トータル損益履歴配列（利益分）
     CArrayDouble clear_lot_losscut_list;  // ポジション調整時トータル損益履歴配列（損失分）
+    CArrayDouble trend_logic_after_all_settlement_judgement_price_diff_list;  // 全決済判定後のトレンド判定ロジックにおいて、全決済判定時とトレンド判定ロジックとの決済価格差を格納する配列
 };
 
 class ExpertMartingale {
@@ -98,6 +100,7 @@ class ExpertMartingale {
         }
 
         static int ExpertMartingale::GetClearLotNum() { return ExpertMartingale::positions_struct.clear_lot_num; }
+        static double ExpertMartingale::GetAllSettlementBasePrice() { return ExpertMartingale::positions_struct.all_settlement_base_price; }
         static double ExpertMartingale::GetLatestPositionPrice() {
             int size = ExpertMartingale::GetPositionSize();
             if (size == 0) return 0.0;
@@ -153,6 +156,7 @@ class ExpertMartingale {
         static void ExpertMartingale::MinusPositionNum() { ExpertMartingale::positions_struct.position_num -= 1; }
         static void ExpertMartingale::AddPositionProfit(double profit) { ExpertMartingale::positions_struct.profit += profit; }
         static void ExpertMartingale::SetClearLotNum(int clear_lot_num) { ExpertMartingale::positions_struct.clear_lot_num = clear_lot_num; }
+        static void ExpertMartingale::SetAllSettlementBasePrice(double all_settlement_base_price) { ExpertMartingale::positions_struct.all_settlement_base_price = all_settlement_base_price; }
         static void ExpertMartingale::SetPositionPriceByKey(int key, double price) { ExpertMartingale::positions_struct.positions[key].price = price; }
         static void ExpertMartingale::SetPositionVolumeByKey(int key, double volume) { ExpertMartingale::positions_struct.positions[key].volume = volume; }
 
@@ -241,6 +245,7 @@ class ExpertMartingale {
         static bool ExpertMartingale::IsCanClearLotRestart();
         static int ExpertMartingale::ClearLot(int logic_flag);
         static int ExpertMartingale::CalcFirstTradeTrend();
+        static bool ExpertMartingale::IsShortTrendContinue(int latest_trade_flag);
         static int ExpertMartingale::CalcSegPoint(double price);
         static int ExpertMartingale::GetNextTradeFlag();
         static int ExpertMartingale::GetLatestTradeFlag();
@@ -262,6 +267,7 @@ class ExpertMartingale {
         static void ExpertMartingale::AddClearLotProfitList(double clear_lot_profit) { ExpertMartingale::trade_analysis_struct.clear_lot_profit_list.Add(clear_lot_profit); }
         static void ExpertMartingale::AddClearLotBenefitList(double clear_lot_benefit) { ExpertMartingale::trade_analysis_struct.clear_lot_benefit_list.Add(clear_lot_benefit); }
         static void ExpertMartingale::AddClearLotLosscutList(double clear_lot_losscut) { ExpertMartingale::trade_analysis_struct.clear_lot_losscut_list.Add(clear_lot_losscut); }
+        static void ExpertMartingale::AddAllSettlementTrendLogicPriceDiff(double profit_diff) { ExpertMartingale::trade_analysis_struct.trend_logic_after_all_settlement_judgement_price_diff_list.Add(profit_diff); }
         static void ExpertMartingale::AddPositionHistory(PositionHistoryStruct &position_history) {
             int size = ExpertMartingale::GetPositionHistorySize();
             ArrayResize(ExpertMartingale::trade_analysis_struct.position_histories, size+1);
@@ -281,6 +287,7 @@ void ExpertMartingale::InitPositionsStruct() {
     ExpertMartingale::positions_struct.position_num = 0;
     ExpertMartingale::positions_struct.clear_lot_num = 0;
     ExpertMartingale::positions_struct.profit = 0;
+    ExpertMartingale::positions_struct.all_settlement_base_price = 0.0;
 }
 
 void ExpertMartingale::InitTradeAnalysisStruct() {
@@ -311,8 +318,15 @@ void ExpertMartingale::PrintTradeAnalysis() {
     int all_settlement_loss_cnt = 0;
     double all_settlement_total_loss = 0.0;
     double all_settlement_total_profit = 0.0;
+
+    int trend_logic_non_adopted_cnt = 0;
+    int trend_logic_price_cnt = 0;
+    double trend_logic_benefit_price = 0.0;
+    int trend_logic_loss_cnt = 0;
+    double trend_logic_loss_price = 0.0;
     for (int i = 0;i < all_settlement_cnt;i++) {
         double all_settlement_profit = ExpertMartingale::trade_analysis_struct.all_settlement_profit_list.At(i);
+
         if (all_settlement_profit >= 0) {
             all_settlement_benefit_cnt += 1;
             all_settlement_total_benefit += all_settlement_profit;
@@ -321,11 +335,31 @@ void ExpertMartingale::PrintTradeAnalysis() {
             all_settlement_total_loss += all_settlement_profit;
         }
         all_settlement_total_profit += all_settlement_profit;
+
+        double all_settlement_trend_logic_price_diff = ExpertMartingale::trade_analysis_struct.trend_logic_after_all_settlement_judgement_price_diff_list.At(i);
+        if (all_settlement_trend_logic_price_diff > 100000) {
+            continue;  // 稀に不正値が入っているので除外する
+        }
+        if (all_settlement_trend_logic_price_diff > 0.0) {
+            trend_logic_price_cnt += 1;
+            trend_logic_benefit_price += all_settlement_trend_logic_price_diff;
+        } else if (all_settlement_trend_logic_price_diff < 0.0) {
+            trend_logic_loss_cnt += 1;
+            trend_logic_loss_price += all_settlement_trend_logic_price_diff;
+        } else {
+            trend_logic_non_adopted_cnt += 1;
+        }
     }
     PrintFormat("[SUMMARY] [全決済履歴] total=%.3f, 利益: %d, avg=%.3f, 損失: %d, avg=%.3f", 
                 all_settlement_total_profit, 
                 all_settlement_benefit_cnt, all_settlement_total_benefit / all_settlement_benefit_cnt, 
                 all_settlement_loss_cnt, all_settlement_total_loss / all_settlement_loss_cnt
+    );
+
+    PrintFormat("[SUMMARY] [トレンド判定による全決済履歴] ロジック使用率:%.2f, 利益価格差: %d回 %.5f avg=%.5f, 損失価格差: %d回 %.5f avg=%.5f",
+                (all_settlement_cnt - trend_logic_non_adopted_cnt) / all_settlement_cnt,
+                trend_logic_price_cnt, trend_logic_benefit_price, trend_logic_benefit_price / trend_logic_price_cnt,
+                trend_logic_loss_cnt, trend_logic_loss_price, trend_logic_loss_price / trend_logic_loss_cnt
     );
 
     int clear_lot_cnt = ExpertMartingale::trade_analysis_struct.clear_lot_profit_list.Total();

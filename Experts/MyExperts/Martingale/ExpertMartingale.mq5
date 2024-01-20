@@ -57,6 +57,11 @@ input int MA_PERIOD = 25;  // 移動平均期間
 input ENUM_MA_METHOD MA_METHOD = MODE_SMA;  // 移動平均モード
 input int MA_COMPARISON_RANGE = 3;  // 移動平均比較時間幅
 
+input group "トレンド継続判定ロジック"
+input int MA_PERIOD_FOR_TREND = 5;  // 移動平均期間
+input ENUM_MA_METHOD MA_METHOD_FOR_TREND = MODE_SMA;  // 移動平均モード
+input int MA_COMPARISON_RANGE_TREND = 5;  // 移動平均比較時間幅
+
 input group "証拠金"
 input int MARGIN_SAFE_LEVEL_RATIO = 2;  // マージンコールの何倍の証拠金維持率でアラートを出すか
 
@@ -211,6 +216,24 @@ int ExpertMartingale::MainLoop() {
 
     // pips単位で利益が出ていれば全決済
     if (ExpertMartingale::IsRevenueBySegCalc(now_price, ExpertMartingale::GetAllSettlementPipsDiff())) {
+        if (ExpertMartingale::IsShortTrendContinue(last_trade_flag)) {  // トレンド継続中ならば決済しない
+            if (ExpertMartingale::GetAllSettlementBasePrice() == 0.0) {
+                ExpertMartingale::SetAllSettlementBasePrice(now_price);
+            }
+            return 1;
+        }
+
+        double all_settlement_base_price = ExpertMartingale::GetAllSettlementBasePrice();
+        if (all_settlement_base_price == 0.0) {
+            ExpertMartingale::AddAllSettlementTrendLogicPriceDiff(0.0);
+        } else {
+            if (last_trade_flag == IS_BUYING) {
+                ExpertMartingale::AddAllSettlementTrendLogicPriceDiff(now_price - all_settlement_base_price);
+            } else {
+                ExpertMartingale::AddAllSettlementTrendLogicPriceDiff(all_settlement_base_price - now_price);
+            }
+        }
+
         PrintNotice("PIPS単位で利益が出ているため全決済");
         if (ExpertMartingale::SettlementAllPosition() == 0) {
             PrintError("全決済異常エラーのため異常終了");
@@ -676,6 +699,26 @@ int ExpertMartingale::CalcFirstTradeTrend() {
     return IS_SELLING;
 }
 
+bool ExpertMartingale::IsShortTrendContinue(int latest_trade_flag) {
+    CMyMovingAverage myMovingAverage();
+    if (!myMovingAverage.Init(Symbol(), PERIOD_M15, MA_PERIOD_FOR_TREND, 0, MA_METHOD_FOR_TREND, PRICE_CLOSE)) {
+        PrintWarn("Failed Init IMA Handle");
+        return false;
+    }
+    if (!myMovingAverage.SetMaByPosition(0, 0, MA_COMPARISON_RANGE)) {
+        PrintWarn("Failed Get IMA Datas");
+        return false;
+    }
+    double latest_ma_data = myMovingAverage.GetImaData(0);
+    double oldest_ma_data = myMovingAverage.GetImaData(MA_COMPARISON_RANGE-1);
+
+    if (latest_trade_flag == IS_BUYING) {
+        return (latest_ma_data > oldest_ma_data);
+    } else if (latest_trade_flag == IS_SELLING) {
+        return (latest_ma_data < oldest_ma_data);
+    }
+    return false;
+}
 
 double ExpertMartingale::CalcNextTradeSegPrice() {
     int next_trade_flag = ExpertMartingale::GetNextTradeFlag();
