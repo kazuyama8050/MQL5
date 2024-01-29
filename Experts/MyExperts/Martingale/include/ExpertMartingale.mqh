@@ -1,4 +1,8 @@
 #include <Arrays\ArrayDouble.mqh>
+#import "MyLibraries/Math.ex5"
+    double MathDivide(const int molec, const int denom);
+    double MathDivide(const double molec, const int denom);
+#import
 
 
 int INIT_BASE_POINT = 0;
@@ -352,14 +356,14 @@ void ExpertMartingale::PrintTradeAnalysis() {
     }
     PrintFormat("[SUMMARY] [全決済履歴] total=%.3f, 利益: %d, avg=%.3f, 損失: %d, avg=%.3f", 
                 all_settlement_total_profit, 
-                all_settlement_benefit_cnt, all_settlement_total_benefit / all_settlement_benefit_cnt, 
-                all_settlement_loss_cnt, all_settlement_total_loss / all_settlement_loss_cnt
+                all_settlement_benefit_cnt, MathDivide(all_settlement_total_benefit, all_settlement_benefit_cnt), 
+                all_settlement_loss_cnt, MathDivide(all_settlement_total_loss, all_settlement_loss_cnt)
     );
 
     PrintFormat("[SUMMARY] [トレンド判定による全決済履歴] ロジック使用率:%.2f, 利益価格差: %d回 %.5f avg=%.5f, 損失価格差: %d回 %.5f avg=%.5f",
-                (all_settlement_cnt - trend_logic_non_adopted_cnt) / all_settlement_cnt,
-                trend_logic_price_cnt, trend_logic_benefit_price, trend_logic_benefit_price / trend_logic_price_cnt,
-                trend_logic_loss_cnt, trend_logic_loss_price, trend_logic_loss_price / trend_logic_loss_cnt
+                MathDivide((all_settlement_cnt - trend_logic_non_adopted_cnt), all_settlement_cnt),
+                trend_logic_price_cnt, trend_logic_benefit_price, MathDivide(trend_logic_benefit_price, trend_logic_price_cnt),
+                trend_logic_loss_cnt, trend_logic_loss_price, MathDivide(trend_logic_loss_price, trend_logic_loss_cnt)
     );
 
     int clear_lot_cnt = ExpertMartingale::trade_analysis_struct.clear_lot_profit_list.Total();
@@ -393,8 +397,8 @@ void ExpertMartingale::PrintTradeAnalysis() {
         }
     }
     PrintFormat("[SUMMARY] [ポジション調整履歴] 利益: %d, avg=%.3f, 損失: %d, avg=%.3f", 
-                clear_lot_final_benefit_cnt, clear_lot_final_total_benefit / clear_lot_final_benefit_cnt, 
-                clear_lot_final_losscut_cnt, clear_lot_final_total_losscut / clear_lot_final_losscut_cnt
+                clear_lot_final_benefit_cnt, MathDivide(clear_lot_final_total_benefit, clear_lot_final_benefit_cnt), 
+                clear_lot_final_losscut_cnt, MathDivide(clear_lot_final_total_losscut, clear_lot_final_losscut_cnt)
     );
 
 
