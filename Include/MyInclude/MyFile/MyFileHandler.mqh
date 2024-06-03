@@ -53,7 +53,6 @@ string MyFileHandler::GetFilepath() {
 
 bool MyFileHandler::IsExistFilrpath() {
     if (FileIsExist(file_handler_setting.filepath)) {
-        PrintFormat("指定のファイルは存在しません。 ファイルパス=%s", file_handler_setting.filepath);
         return false;
     }
     return true;

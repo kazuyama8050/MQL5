@@ -76,6 +76,48 @@ double MathMeanForDouble(const double &array[]) export {
     return mean;
 }
 
+double MathMaxForDouble(const CArrayDouble &array, const int start, int end) export {
+    int size = array.Total();
+    if(size < 1) {return(0.0);}
+    if (end == 0) {end = size;}
+        
+    double max = 0;
+    for(int i = start; i < size; i++) {
+        if (i == start) {
+            max = array.At(i);
+            continue;
+        }
+        if (array.At(i) > max) {
+            max = array.At(i);
+        }
+        if (end <= i) {
+            break;
+        }
+    }
+    return max;
+}
+
+double MathMinForDouble(const CArrayDouble &array, const int start, int end) export {
+    int size = array.Total();
+    if(size < 1) {return(0.0);}
+    if (end == 0) {end = size;}
+        
+    double min = 0;
+    for(int i = start; i < size; i++) {
+        if (i == start) {
+            min = array.At(i);
+            continue;
+        }
+        if (array.At(i) < min) {
+            min = array.At(i);
+        }
+        if (end <= i) {
+            break;
+        }
+    }
+    return min;
+}
+
 //配列の各要素ごとの差分の平均値算出
 double MathDiffMeanForDouble(const CArrayDouble &array) export {
     double diff_mean = 0.0;
